@@ -1,26 +1,42 @@
-# 论文伴侣 · Paper Companion 2.3
+# 论文伴侣 · Paper Companion
 
 [![Build](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml/badge.svg)](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/zhaoy6859-svg/PaperCompanion)](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest)
+[![License](https://img.shields.io/github/license/zhaoy6859-svg/PaperCompanion)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black)](#安装)
 
-macOS 原生论文精读 App：一个主阅读区，右侧固定 AI 问答。完整译文经过 XeLaTeX 编译后替换原文，可随时切回，两种视图分别保留阅读位置。
+**macOS 原生论文精读 App**：左边读 PDF，右边是 AI 伴侣。译文由 XeLaTeX 按原文版式重排，问答支持 Markdown / 公式 / 表格，可接任意 OpenAI 兼容模型（默认 DeepSeek）。
+
+## ⬇️ 直接下载安装
+
+**[下载 论文伴侣 2.3.0（macOS 13+）](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest)** · DMG 5.9 MB
+
+1. 打开上面的 Release 页面，下载 `PaperCompanion-2.3.0.dmg`
+2. 把「论文伴侣」拖进「应用程序」
+3. 首次打开若被 Gatekeeper 拦下：右键 →「打开」，或执行
+   `xattr -dr com.apple.quarantine "/Applications/论文伴侣.app"`
+
+> 只阅读和问答不需要额外依赖；要让「译文 / 学习报告」排版跑通，需要本机安装 MacTeX 或 TeX Live（`xelatex`）。
+
+觉得有用的话，点右上角 ⭐ **Star** 支持一下，也欢迎邮件交流：**zhaoy6859@gmail.com**
+
+![论文伴侣：大肥鱼欢迎页](docs/welcome.png)
+
+<sub>**English** — Paper Companion is a native macOS app for reading papers: a PDF reader with an AI companion, Markdown/KaTeX chat, and on-demand XeLaTeX typeset translations that keep the paper's page size, margins and columns. Works with DeepSeek (default) and any OpenAI-compatible API. [Download the latest release](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest).</sub>
 
 ## 界面
 
-| 欢迎 | 熟悉程度 |
+| 熟悉程度 | 译文（与原文同版式） |
 | --- | --- |
-| ![欢迎](docs/welcome.png) | ![熟悉程度](docs/level.png) |
+| ![熟悉程度](docs/level.png) | ![译文](docs/translation.png) |
 
-| 译文（与原文同版式，带进度浮层） | 问答（Markdown / 公式 / 表格） |
+| 问答（Markdown / 公式 / 表格） | 模型设置（可接任意大模型） |
 | --- | --- |
-| ![译文](docs/translation.png) | ![问答](docs/chat.png) |
-
-| 模型设置（可接任意大模型） |
-| --- |
-| ![设置](docs/settings.png) |
+| ![问答](docs/chat.png) | ![设置](docs/settings.png) |
 
 ## 阅读流程
 
-1. 启动后由鲸鱼少女「论文伴侣」欢迎你；选择 PDF、拖入文件，或继续上次阅读。
+1. 启动后由大肥鱼「论文伴侣」欢迎你；选择 PDF、拖入文件，或继续上次阅读。
 2. 伴侣询问你对论文的熟悉程度：完全陌生、了解基础、比较熟悉。解释深度随选择调整，每篇论文独立保存，可随时修改。
 3. **默认不自动翻译**：设置目标语言后点「开始翻译」才会发起请求；翻译中可停止、继续或重新翻译。半透明进度浮层显示已完成页数；排版阶段显示独立等待状态。浮层不接收鼠标事件，不阻挡滚动、选字和提问。
 4. 完整译文成功编译后进入主阅读区；可导出本地 PDF。排版失败时保留原文，并可导出 TeX 源码。
@@ -31,17 +47,17 @@ macOS 原生论文精读 App：一个主阅读区，右侧固定 AI 问答。完
 
 - 不再只接 DeepSeek：设置里可选 DeepSeek（默认）、OpenAI、Anthropic Claude、Google Gemini、通义千问、Moonshot Kimi、智谱 GLM、OpenRouter、硅基流动、本地 Ollama，或任意 OpenAI 兼容服务。
 - Base URL 和模型名都可改；每个服务单独保存 Key，切回来不用重填。视觉能力按服务自动开关。
-- 伴侣换成同一只鲸鱼少女的九张表情：欢迎、熟悉度、聊天头像、进度、设置和 App 图标分别使用不同姿态。
+- 伴侣换成同一只「大肥鱼」的九张表情：欢迎、熟悉度、聊天头像、进度、设置和 App 图标分别使用不同姿态。
 
 ## 2.2 的变化
 
-- 伴侣形象换成原创的鲸鱼少女，欢迎页、熟悉程度提问、聊天头像与 App 图标统一使用；其余九个角色作为「陪读团」出现在欢迎页。
+- 伴侣形象换成原创的大肥鱼插画，欢迎页、熟悉程度提问、聊天头像与 App 图标统一使用。
 - 翻译改为手动触发：打开论文不会产生任何模型请求，点「开始翻译」后才翻译。
 - 修好表格排版：宽表格自动缩放到栏宽（两栏模式下不再挤压重叠），并支持模型输出的 `\(...\)` 行内公式与 Markdown 表格。
 
 ## 排版与界面
 
-- 原创鲸鱼少女插画用于欢迎页、熟悉程度提问页、聊天头像和 App 图标；另外九张角色插画组成欢迎页的「陪读团」。
+- 原创大肥鱼插画用于欢迎页、熟悉程度提问页、聊天头像、进度、设置和 App 图标。
 - 译文连续排版，不再插入“原文第几页”标题或人为逐页换页；通过不可见书签保留原文定位信息。
 - 读取源 PDF 的纸张尺寸、估计边距、主要字号、单双栏布局，保留模型输出的标题层级、表格与公式编号。
 - 翻译后的文字长度不同，不能逐行逐页复刻原版。单双栏识别为启发式；混合跨栏布局、复杂图表和原图的位置目前不会完整重建。多个原文页合并到一个译文页时，页级定位只取该译文页的第一个来源锚点。
@@ -116,3 +132,5 @@ swiftc -parse-as-library -framework AppKit -framework WebKit tests/RichTranscrip
 MIT License © 2026 [zhaoy6859-svg](https://github.com/zhaoy6859-svg)
 
 欢迎提 Issue 和 PR。文字和插画版权归作者所有，代码可自由使用、修改和分发。
+
+如果这个项目帮到了你，点个 ⭐ Star 就是最大的鼓励。
