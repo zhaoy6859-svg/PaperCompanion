@@ -1,0 +1,60 @@
+name: Windows desktop
+on:
+  push:
+    branches: [main, 'feat/windows-*']
+    tags: ['v*-windows*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Prepare bundled LaTeX engine
+        run: npm run fetch:tex
+      - name: Unit tests
+        run: npm test
+      - name: Desktop integration tests with local mock model
+        run: npm run test:e2e
+      - name: Build Windows installer and portable ZIP
+        run: npm run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify packaged application starts
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path ../dist/windows/win-unpacked/PaperCompanion.exe
+          $process = Start-Process $exe -PassThru
+          Start-Sleep -Seconds 12
+          if ($process.HasExited) { throw "Packaged application exited unexpectedly" }
+          Stop-Process -Id $process.Id -Force
+      - name: Upload Windows distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: PaperCompanion-Windows-x64
+          path: |
+            dist/windows/*.exe
+            dist/windows/*.zip
+          if-no-files-found: error
+      - name: Upload test report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-test-evidence
+          path: |
+            desktop/test-results/
+            desktop/playwright-report/
+          if-no-files-found: warn
