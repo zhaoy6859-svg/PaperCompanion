@@ -1,0 +1,21 @@
+name: 功能建议
+description: 想要的新能力或交互改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 描述使用场景，而不是直接给方案
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你设想的做法
+  - type: input
+    id: contact
+    attributes:
+      label: 联系方式（可选）
+      description: 也可以直接发邮件到 zhaoy6859@gmail.com

@@ -1,0 +1,64 @@
+name: Bug 报告
+description: 遇到崩溃、排版错误、译文或问答异常
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量附上截图和日志，方便定位问题。
+        如果是公式或排版问题，最好同时给出原文 PDF 的对应页码。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 简要描述现象和期望的结果
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开某篇 PDF
+        2. 点「开始翻译」
+        3. ……
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App 版本
+      description: 菜单「论文伴侣 → 关于」或 DMG 文件名
+      placeholder: 2.3.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本与芯片
+      placeholder: macOS 15.2 / Apple Silicon
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: 使用的模型服务
+      options:
+        - DeepSeek
+        - OpenAI
+        - Anthropic Claude
+        - Google Gemini
+        - 通义千问
+        - Moonshot Kimi
+        - 智谱 GLM
+        - OpenRouter
+        - 硅基流动
+        - Ollama
+        - 自定义
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 可用 `PAPER_COMPANION_DEBUG=1` 启动 App 获取日志
+      render: shell

@@ -1,5 +1,7 @@
 # 论文伴侣 · Paper Companion 2.3
 
+[![Build](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml/badge.svg)](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml)
+
 macOS 原生论文精读 App：一个主阅读区，右侧固定 AI 问答。完整译文经过 XeLaTeX 编译后替换原文，可随时切回，两种视图分别保留阅读位置。
 
 ## 界面
@@ -100,6 +102,14 @@ swiftc -parse-as-library -framework AppKit -framework WebKit tests/RichTranscrip
 
 资源来源和完整插画提示词见 `Resources/Companion/PROVENANCE.md`；本地网页依赖版本和许可见 `Resources/Chat/THIRD_PARTY.md`。
 
+
+## 交流
+
+有任何问题、建议，或者想聊聊论文阅读，都欢迎邮件找我：
+
+**zhaoy6859@gmail.com**
+
+也欢迎直接在 GitHub 上提 Issue。
 
 ## 开源协议
 
