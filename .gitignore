@@ -1,0 +1,16 @@
+# Build output
+build/
+dist/
+*.dmg
+*.zip
+
+# macOS
+.DS_Store
+
+# Xcode / SwiftPM
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+
+# Local test artefacts
+*.log
