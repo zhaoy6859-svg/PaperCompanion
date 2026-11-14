@@ -58,3 +58,30 @@ jobs:
             desktop/test-results/
             desktop/playwright-report/
           if-no-files-found: warn
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PaperCompanion-Windows-x64
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          name: Paper Companion 2.4 · Windows Preview
+          files: artifacts/*
+          fail_on_unmatched_files: true
+          body: |
+            Windows 10/11 x64 桌面预览版，保留仓库中的 macOS 原生版。
+
+            下载 `.exe` 安装包；或下载 `.zip` 解压后运行 PaperCompanion.exe。
+            包含 Tectonic 排版引擎和 Noto CJK 字体；第一次生成译文/报告需要联网下载 TeX 包。
+            已在 GitHub Actions Windows Server 2022 环境运行真实 Electron 界面、模拟模型、LaTeX PDF 编译、导出、长对话和打包启动测试。
+
+            此版本尚未进行实体 Windows 10/11 设备验收，也未进行 Windows 代码签名。
+            首次运行可能出现 SmartScreen 提示；请核对下载来源为本仓库 Releases。
+            Windows 暂不包含 macOS 的框选 OCR、划线笔记和每服务独立 Key。复杂图表布局与公式识别仍需核对原文。

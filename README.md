@@ -3,13 +3,24 @@
 [![Build](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml/badge.svg)](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/zhaoy6859-svg/PaperCompanion)](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest)
 [![License](https://img.shields.io/github/license/zhaoy6859-svg/PaperCompanion)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black)](#安装)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-black)](#安装)
+[![Windows](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/windows.yml/badge.svg)](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/windows.yml)
 
-**macOS 原生论文精读 App**：左边读 PDF，右边是 AI 伴侣。译文由 XeLaTeX 按原文版式重排，问答支持 Markdown / 公式 / 表格，可接任意 OpenAI 兼容模型（默认 DeepSeek）。
+**论文精读 App（macOS 原生版 + Windows 桌面预览版）**：左边读 PDF，右边是 AI 伴侣。译文由 XeLaTeX 按原文版式重排，问答支持 Markdown / 公式 / 表格，可接任意 OpenAI 兼容模型（默认 DeepSeek）。
 
-## ⬇️ 直接下载安装
+## Windows 桌面预览版
 
-**[下载 论文伴侣 2.3.0（macOS 13+）](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest)** · DMG 5.9 MB
+**[下载 Windows 版](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.4.0-windows-beta.1)** · Windows 10/11 x64
+
+- `.exe`：安装程序；`.zip`：解压后运行 `PaperCompanion.exe`。
+- 保留同一只伴侣，支持 PDF 阅读、熟悉度、右侧问答、长对话记忆、多语言精翻与 LaTeX 学习报告。
+- 自带 Tectonic 排版引擎和中文字体；首次生成 PDF 需要联网下载 TeX 排版资源。
+- 已配置真实 Windows 云端 UI / 编译 / 打包测试；首版仍为预览版，尚未做实体 Windows 10/11 验收，也未进行 Windows 代码签名。
+- Windows 暂未移植框选 OCR、划线笔记、每服务独立 Key。详情和构建说明见 [desktop/README.md](desktop/README.md)。
+
+## ⬇️ macOS 下载安装
+
+**[下载 论文伴侣 2.3.0（macOS 13+）](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.3.0)** · DMG 5.9 MB
 
 1. 打开上面的 Release 页面，下载 `PaperCompanion-2.3.0.dmg`
 2. 把「论文伴侣」拖进「应用程序」
@@ -22,7 +33,7 @@
 
 ![论文伴侣：大肥鱼欢迎页](docs/welcome.png)
 
-<sub>**English** — Paper Companion is a native macOS app for reading papers: a PDF reader with an AI companion, Markdown/KaTeX chat, and on-demand XeLaTeX typeset translations that keep the paper's page size, margins and columns. Works with DeepSeek (default) and any OpenAI-compatible API. [Download the latest release](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest).</sub>
+<sub>**English** — Paper Companion is a paper reading app with a native macOS edition and a Windows desktop preview: a PDF reader with an AI companion, Markdown/KaTeX chat, and on-demand XeLaTeX typeset translations that keep the paper's page size, margins and columns. Works with DeepSeek (default) and any OpenAI-compatible API. [Download the latest release](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest).</sub>
 
 ## 界面
 
