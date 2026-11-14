@@ -106,9 +106,17 @@ app.whenReady().then(async() => {
   handle('tex:compile',async(id,markdown,layout) => { requireDoc(id); if(typeof markdown !== 'string'||markdown.length>2000000) throw new Error('文档内容过长'); return compile(markdown,layout); });
   handle('file:export',async(id,kind) => {
     const out=outputs.get(id); if(!out) throw new Error('请先生成文档');
-    const ext=kind==='tex'?'tex':'pdf'; const data=ext==='tex'?out.tex:out.pdf; if(!data) throw new Error('PDF 尚未生成，可导出 LaTeX 源码');
+    const ext=kind==='tex'?'tex':'pdf'; let data=ext==='tex'?out.tex:out.pdf; if(!data) throw new Error('PDF 尚未生成，可导出 LaTeX 源码');
     const result=testing?{filePath:path.join(root(),'export.'+ext)}:await dialog.showSaveDialog(win,{defaultPath:'论文伴侣.'+ext,filters:[{name:ext.toUpperCase(),extensions:[ext]}]});
-    if(result.canceled||!result.filePath) return false; await fs.writeFile(result.filePath,data); return true;
+    if(result.canceled||!result.filePath) return false;
+    if (ext === 'tex' && data.includes('\\setCJKmainfont{cjk.otf}')) {
+      const destination = path.dirname(result.filePath);
+      await fs.copyFile(path.join(out.dir,'cjk.otf'),path.join(destination,'paper-companion-cjk.otf'));
+      const fontLicense = path.join(app.isPackaged ? path.join(process.resourcesPath,'tex') : path.resolve(__dirname,'../tools'),'NOTO-LICENSE.txt');
+      await fs.copyFile(fontLicense,path.join(destination,'paper-companion-font-license.txt'));
+      data = data.replace('\\setCJKmainfont{cjk.otf}','\\setCJKmainfont{paper-companion-cjk.otf}');
+    }
+    await fs.writeFile(result.filePath,data); return true;
   });
   await win.loadFile(path.join(__dirname,'index.html'));
 });

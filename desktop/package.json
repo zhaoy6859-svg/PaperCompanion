@@ -12,16 +12,52 @@
     "build:win": "electron-builder --win nsis zip --x64 --publish never",
     "fetch:tex": "node scripts/fetch-tectonic.cjs"
   },
-  "dependencies": {"pdfjs-dist": "6.5.438"},
-  "devDependencies": {"electron": "45.3.2", "electron-builder": "26.18.0", "@playwright/test": "1.65.1"},
+  "dependencies": {
+    "pdfjs-dist": "6.5.438"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0",
+    "@playwright/test": "1.65.1"
+  },
   "build": {
     "appId": "com.papercompanion.windows",
     "productName": "PaperCompanion",
-    "directories": {"output": "../dist/windows"},
-    "files": ["src/**/*", "package.json", "node_modules/pdfjs-dist/**/*"],
-    "extraResources": [{"from": "../Resources", "to": "shared"}, {"from": "tools", "to": "tex", "filter": ["**/*"]}],
-    "win": {"target": ["nsis", "zip"], "artifactName": "PaperCompanion-${version}-windows-${arch}.${ext}"},
-    "nsis": {"oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true},
+    "directories": {
+      "output": "../dist/windows"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "node_modules/pdfjs-dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../Resources",
+        "to": "shared"
+      },
+      {
+        "from": "tools",
+        "to": "tex",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "PaperCompanion-${version}-windows-${arch}.${ext}",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
     "asar": true
   }
 }
