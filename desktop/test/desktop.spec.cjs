@@ -13,6 +13,7 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   else if(system.includes('学习报告'))answer='# 学习报告\n\n## 核心概念\n经验风险是平均损失。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n## 待追问\n如何评估泛化误差？';
   else if(system.includes('目标语言'))answer='# Research Paper\n\n## Empirical risk\nThe **average loss** is defined by\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n| Symbol | Meaning |\n| --- | --- |\n| $n$ | sample size |';
   else answer='## 经验风险\n\n**平均损失**衡量训练样本误差。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n<script>window.hacked=true</script>';
+  if(system.includes('目标语言'))await new Promise(r=>setTimeout(r,700));
   res.writeHead(200,{'Content-Type':'text/event-stream'});for(const delta of [answer.slice(0,12),answer.slice(12)])res.write('data: '+JSON.stringify({choices:[{delta:{content:delta}}]})+'\n\n');res.end('data: [DONE]\n\n');
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let app;const launch=()=>electron.launch({args:[path.resolve(__dirname,'..')],env:{...process.env,PC_E2E:'1',PC_TEST_HOME:home,PC_TEST_PDF:file}});
@@ -24,9 +25,13 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   await expect(page.locator('.pdf-page canvas')).toHaveCount(1);await expect(page.locator('.textLayer')).toContainText('Empirical risk');
   await page.locator('#question').fill('请解释经验风险');await page.locator('#send').click();await expect(page.locator('#conversation .katex')).toBeVisible();await expect(page.locator('#send')).toBeEnabled();expect(await page.evaluate(()=>window.hacked)).toBeUndefined();
   expect(calls.at(-1).messages[0].content).toContain('完全陌生');
+  await page.locator('#translate').click();await expect(page.locator('#progress')).toBeVisible();
+  expect(await page.locator('#progress').evaluate(el=>getComputedStyle(el).pointerEvents)).toBe('none');
+  await page.locator('#question').click();await expect(page.locator('#question')).toBeFocused();
+  await page.locator('#translate').click();await expect(page.locator('#translate')).toHaveText('精翻全文');
   await page.locator('#translate').click();await expect(page.locator('#view-label')).toHaveText('LaTeX 译文',{timeout:240000});await page.screenshot({path:testInfo.outputPath('translation-chat.png')});
   expect(calls.some(c=>c.messages[0].content.includes('目标语言：English'))).toBeTruthy();
-  await page.locator('#export').click();await page.locator('#export-pdf').click();expect((await fs.readFile(path.join(home,'export.pdf'))).subarray(0,5).toString()).toBe('%PDF-');await page.locator('#export-tex').click();expect(await fs.readFile(path.join(home,'export.tex'),'utf8')).toContain('\\frac{1}{n}');await page.locator('#close-export').click();
+  await page.locator('#export').click();await page.locator('#export-pdf').click();expect((await fs.readFile(path.join(home,'export.pdf'))).subarray(0,5).toString()).toBe('%PDF-');await page.locator('#export-tex').click();expect(await fs.readFile(path.join(home,'export.tex'),'utf8')).toContain('\\frac{1}{n}');if(process.platform==='win32')await fs.access(path.join(home,'paper-companion-cjk.otf'));await page.locator('#close-export').click();
   await page.locator('#switch').click();await expect(page.locator('#view-label')).toHaveText('原文');await page.locator('#switch').click();await expect(page.locator('#view-label')).toHaveText('LaTeX 译文');
   await page.locator('#report').click();await expect(page.locator('#export-dialog')).toBeVisible({timeout:240000});await expect(page.locator('#export-pdf')).toBeEnabled();await page.locator('#export-tex').click();expect(await fs.readFile(path.join(home,'export.tex'),'utf8')).toContain('学习报告');await page.locator('#close-export').click();
   failNext=true;await page.locator('#question').fill('重试测试');await page.locator('#send').click();await expect(page.locator('#status')).toContainText('HTTP 500');await expect(page.locator('#question')).toHaveValue('重试测试');
