@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build app
+        run: ./build.sh
+
+      - name: Check bundle
+        run: |
+          test -x "build/论文伴侣.app/Contents/MacOS/PaperCompanion"
+          test -f "build/论文伴侣.app/Contents/Resources/Chat/index.html"
+          test -f "build/论文伴侣.app/Contents/Resources/Companion/poses/pdf.png"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "build/论文伴侣.app/Contents/Info.plist"
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: PaperCompanion-app
+          path: build/论文伴侣.app
+          if-no-files-found: error
