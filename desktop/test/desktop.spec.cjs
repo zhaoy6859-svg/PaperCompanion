@@ -13,7 +13,7 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   else if(system.includes('学习报告'))answer='# 学习报告\n\n## 核心概念\n经验风险是平均损失。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n## 待追问\n如何评估泛化误差？';
   else if(system.includes('目标语言'))answer='# Research Paper\n\n## Empirical risk\nThe **average loss** is defined by\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n| Symbol | Meaning |\n| --- | --- |\n| $n$ | sample size |';
   else answer='## 经验风险\n\n**平均损失**衡量训练样本误差。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n<script>window.hacked=true</script>';
-  if(system.includes('目标语言'))await new Promise(r=>setTimeout(r,700));
+  if(system.includes('目标语言'))await new Promise(r=>setTimeout(r,2000));
   res.writeHead(200,{'Content-Type':'text/event-stream'});for(const delta of [answer.slice(0,12),answer.slice(12)])res.write('data: '+JSON.stringify({choices:[{delta:{content:delta}}]})+'\n\n');res.end('data: [DONE]\n\n');
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let app;const launch=()=>electron.launch({args:[path.resolve(__dirname,'..')],env:{...process.env,PC_E2E:'1',PC_TEST_HOME:home,PC_TEST_PDF:file}});
@@ -21,9 +21,9 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   app=await launch();let page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await expect(page.locator('#welcome')).toBeVisible();await page.screenshot({path:testInfo.outputPath('welcome.png')});
   await page.locator('#settings').click();await page.locator('#base-url').fill('http://127.0.0.1:'+server.address().port+'/v1');await page.locator('#model').fill('mock');await page.locator('#language').fill('English');await page.getByRole('button',{name:'保存设置',exact:true}).click();
-  await page.locator('#welcome-open').click();await expect(page.locator('#level-dialog')).toBeVisible();await page.screenshot({path:testInfo.outputPath('familiarity.png')});await page.locator('[data-level="beginner"]').click();await page.locator('#start-reading').click();
+  await page.locator('#welcome-open').click();await expect(page.locator('#level-dialog')).toBeVisible();await page.screenshot({path:testInfo.outputPath('familiarity.png')});await page.locator('[data-level="beginner"]').click();await page.locator('#start-reading').click();await expect(page.locator('#level-dialog')).not.toBeVisible();
   await expect(page.locator('.pdf-page canvas')).toHaveCount(1);await expect(page.locator('.textLayer')).toContainText('Empirical risk');
-  await page.locator('#question').fill('请解释经验风险');await page.locator('#send').click();await expect(page.locator('#conversation .katex')).toBeVisible();await expect(page.locator('#send')).toBeEnabled();expect(await page.evaluate(()=>window.hacked)).toBeUndefined();
+  await page.locator('#question').fill('请解释经验风险');await expect(page.locator('#question')).toHaveValue('请解释经验风险');await page.locator('#send').click();await expect(page.locator('#conversation .katex')).toBeVisible();await expect(page.locator('#send')).toBeEnabled();expect(await page.evaluate(()=>window.hacked)).toBeUndefined();
   expect(calls.at(-1).messages[0].content).toContain('完全陌生');
   await page.locator('#translate').click();await expect(page.locator('#progress')).toBeVisible();
   expect(await page.locator('#progress').evaluate(el=>getComputedStyle(el).pointerEvents)).toBe('none');

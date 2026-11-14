@@ -97,11 +97,11 @@ async function translate(){
       if(translationStop)throw new Error('翻译已停止');
       cache[i]=await request([{role:'system',content:config.prompt+'\n目标语言：'+config.language+'\n保留 Markdown 标题层级和数学 LaTeX，不添加原文页码标题。'}, {role:'user',content}],()=>{},id=>translationRequest=id);await save();
     }
-    progress('精翻完成 · 正在排版正文和公式',null);
+    progress('精翻完成 · 正在排版正文和公式',null);$('translate').textContent='正在排版…';$('translate').disabled=true;
     const output=await api.compile(paper.id,pages.map((_,i)=>cache[i]).join('\n\n'),layout);translationOutput=output;exportOutput=output;$('export').disabled=false;
     if(output.error)throw new Error(output.error);
     if(translated)await translated.destroy();translated=await loadPDF(output.bytes);showingTranslation=true;await showPDF(translated);status('译文已就绪 · 可导出 PDF 或切回原文');
-  }finally{translating=false;translationRequest=null;$('translate').textContent='精翻全文';$('progress').hidden=true;}
+  }finally{translating=false;translationRequest=null;$('translate').disabled=false;$('translate').textContent='精翻全文';$('progress').hidden=true;}
 }
 async function memory(){
   let start=state.threads.length,size=0;
