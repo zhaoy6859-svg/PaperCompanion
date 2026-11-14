@@ -39,7 +39,7 @@ On macOS, the same integration test can use an installed `/Library/TeX/texbin/xe
 
 The test opens an actual Electron window, uses an ephemeral local mock SSE model server, and creates isolated data under a temporary directory. It does not access real API keys or send papers to an external AI service. `PC_E2E`, `PC_TEST_HOME` and `PC_TEST_PDF` are ignored by packaged applications.
 
-Windows CI runs unit tests, actual UI tests, TeX compilation and export, then builds an NSIS installer and ZIP and verifies that the packaged executable stays running. Screenshots, Playwright traces on failure, and reports are uploaded as Actions artifacts. A `v*-windows*` tag publishes a prerelease only after the Windows job succeeds.
+Windows CI runs unit tests, actual UI tests, TeX compilation and export, then builds an NSIS installer and ZIP and verifies the packaged welcome artwork and settings UI. Screenshots, Playwright traces on failure, and reports are uploaded as Actions artifacts. A `v*-windows*` tag publishes a prerelease only after the Windows job succeeds.
 
 ## Dependencies and licenses
 
