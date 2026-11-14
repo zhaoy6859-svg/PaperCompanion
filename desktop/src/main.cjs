@@ -43,7 +43,9 @@ function spawnCompile(command,args,cwd) {
   });
 }
 async function compile(markdown, layout) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(),'paper-companion-')); const tex = latexDocument(markdown,layout);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(),'paper-companion-')); let tex = latexDocument(markdown,layout);
+  const toolsDir = app.isPackaged ? path.join(process.resourcesPath,'tex') : path.resolve(__dirname,'../tools');
+  try { await fs.copyFile(path.join(toolsDir,'cjk.otf'),path.join(dir,'cjk.otf')); tex = tex.replace(/\\setCJKmainfont\{[^}]+\}/, '\\setCJKmainfont{cjk.otf}'); } catch(e) { if(e.code !== 'ENOENT') throw e; }
   const id = crypto.randomUUID(); outputs.set(id,{dir,tex,pdf:null});
   await fs.writeFile(path.join(dir,'paper.tex'),tex);
   const bundled = path.join(app.isPackaged ? path.join(process.resourcesPath,'tex') : path.resolve(__dirname,'../tools'),'tectonic' + (process.platform === 'win32' ? '.exe' : ''));
