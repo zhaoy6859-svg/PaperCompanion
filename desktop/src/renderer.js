@@ -58,7 +58,7 @@ async function paint(el,token) {
   item.task=item.page.render({canvasContext:canvas.getContext('2d'),viewport:item.viewport,transform:ratio===1?null:[ratio,0,0,ratio,0,0]});await item.task.promise;if(token!==generation)return;
   const layer=document.createElement('div');layer.className='textLayer';el.append(layer);item.text=new pdfjs.TextLayer({textContentSource:await item.page.getTextContent(),container:layer,viewport:item.viewport});await item.text.render();
 }
-function jump(n) { const value=Math.max(1,Math.min(currentPDF?.numPages||1,Number(n)||1));$('pdf').querySelector(`[data-page="${value}"]`)?.scrollIntoView({block:'start'});$('page').value=value; }
+function jump(n) { const value=Math.max(1,Math.min(currentPDF?.numPages||1,Number(n)||1));const container=$('pdf'),el=container.querySelector(`[data-page="${value}"]`);if(el)container.scrollTo({top:el.offsetTop-container.offsetTop-22,behavior:'instant'});$('page').value=value; }
 async function open(resume=false) {
   if(translating||chatting||reporting) throw new Error('请先停止当前任务，或等待报告生成后再切换论文');
   if(paper) await save();const result=await api.open(resume);if(!result)return;
@@ -152,7 +152,7 @@ $('zoom-in').onclick=task(async()=>{scale=Math.min(2.5,scale+0.15);await showPDF
 $('clear-selection').onclick=clearSelection;$('ask-form').onsubmit=e=>{e.preventDefault();task(ask)();};$('question').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();task(ask)();}};
 $('cancel-chat').onclick=task(()=>api.cancel(chatRequest));$('report').onclick=task(report);
 $('export').onclick=()=>showExport(translationOutput);$('close-export').onclick=()=>$('export-dialog').close();
-for(const kind of ['pdf','tex'])$('export-'+kind).onclick=task(async()=>{if(await api.export(exportOutput.id,kind))status('已保存到本地');});
+for(const kind of ['pdf','tex'])$('export-'+kind).onclick=task(async()=>{const button=$('export-'+kind);button.disabled=true;status('正在导出 '+kind.toUpperCase()+'…');try{if(await api.export(exportOutput.id,kind))status('已保存到本地 · '+kind.toUpperCase());}finally{button.disabled=false;}});
 $('settings').onclick=()=>{if(translating||chatting||reporting){status('请等待或停止当前任务后修改模型设置');return;}showSettings();};$('close-settings').onclick=()=>$('settings-dialog').close();
 $('provider').onchange=()=>{const presets={deepseek:['https://api.deepseek.com','deepseek-chat'],openai:['https://api.openai.com/v1','gpt-4.1'],qwen:['https://dashscope.aliyuncs.com/compatible-mode/v1','qwen-plus'],ollama:['http://localhost:11434/v1','qwen3:8b']};const value=presets[$('provider').value];if(value){$('base-url').value=value[0];$('model').value=value[1];$('vision').checked=false;}};
 $('settings-form').onsubmit=e=>{e.preventDefault();task(async()=>{settings=await api.saveSettings({baseURL:$('base-url').value,model:$('model').value,language:$('language').value,prompt:$('prompt').value,apiKey:$('api-key').value,clearKey:$('clear-key').checked,vision:$('vision').checked});$('settings-dialog').close();status('设置已保存');})()};

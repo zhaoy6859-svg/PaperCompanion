@@ -5,6 +5,9 @@ on:
     tags: ['v*-windows*']
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
