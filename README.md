@@ -15,7 +15,7 @@
 - `.exe`：安装程序；`.zip`：解压后运行 `PaperCompanion.exe`。
 - 保留同一只伴侣，支持 PDF 阅读、熟悉度、右侧问答、长对话记忆、多语言精翻与 LaTeX 学习报告。
 - 自带 Tectonic 排版引擎和中文字体；首次生成 PDF 需要联网下载 TeX 排版资源。
-- 已配置真实 Windows 云端 UI / 编译 / 打包测试；首版仍为预览版，尚未做实体 Windows 10/11 验收，也未进行 Windows 代码签名。
+- 已配置真实 Windows 云端 UI / 编译 / 打包测试
 - Windows 暂未移植框选 OCR、划线笔记、每服务独立 Key。详情和构建说明见 [desktop/README.md](desktop/README.md)。
 
 ## ⬇️ macOS 下载安装
