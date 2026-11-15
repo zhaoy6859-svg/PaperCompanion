@@ -12,7 +12,8 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   if(system.includes('学习记忆'))answer='早期记忆：用户关注经验风险、参数含义和泛化误差。';
   else if(system.includes('OCR'))answer='经验风险 是训练集上的平均损失。';
   else if(system.includes('学习报告'))answer='# 学习报告\n\n## 核心概念\n经验风险是平均损失。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n## 待追问\n如何评估泛化误差？';
-  else if(system.includes('目标语言'))answer='# Research Paper\n\n## Empirical risk\nThe **average loss** is defined by\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n| Symbol | Meaning |\n| --- | --- |\n| $n$ | sample size |';
+  else if(system.includes('修正论文译文里的表格排版'))answer='# Research Paper\n\n## Empirical risk\nThe **average loss** is defined by\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n表 3. ZIP 和 ZIGP 模型的贝叶斯比较。\n\n| 模型 | DIC | B |\n| --- | --- | --- |\n| ZIP | 1343.6443 | -679.3078 |\n| ZIGP | 1050.6254 | -526.3694 |';
+  else if(system.includes('目标语言'))answer='# Research Paper\n\n## Empirical risk\nThe **average loss** is defined by\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n表 3. ZIP 和 ZIGP 模型的贝叶斯比较。\n模型 DIC B\nZIP 1343.6443 - 679.3078\nZIGP 1050.6254 - 526.3694';
   else answer='## 经验风险\n\n**平均损失**衡量训练样本误差。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n<script>window.hacked=true</script>';
   if(system.includes('目标语言'))await new Promise(r=>setTimeout(r,2000));
   res.writeHead(200,{'Content-Type':'text/event-stream'});for(const delta of [answer.slice(0,12),answer.slice(12)])res.write('data: '+JSON.stringify({choices:[{delta:{content:delta}}]})+'\n\n');res.end('data: [DONE]\n\n');
@@ -71,6 +72,7 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   await page.locator('#translate').click();await expect(page.locator('#translate')).toHaveText('精翻全文');
   await page.locator('#translate').click();await expect(page.locator('#view-label')).toHaveText('LaTeX 译文',{timeout:240000});await expect(page.locator('header')).toBeInViewport();await expect(page.locator('#ask-form')).toBeInViewport();await page.screenshot({path:testInfo.outputPath('translation-chat.png')});
   expect(calls.some(c=>c.messages[0].content.includes('目标语言：English'))).toBeTruthy();
+  expect(calls.some(c=>String(c.messages[0].content).includes('修正论文译文里的表格排版'))).toBeTruthy();
   await page.locator('#export').click();await page.locator('#export-pdf').click();await expect(page.locator('#status')).toHaveText('已保存到本地 · PDF');expect((await fs.readFile(path.join(home,'export.pdf'))).subarray(0,5).toString()).toBe('%PDF-');await page.locator('#export-tex').click();await expect(page.locator('#status')).toHaveText('已保存到本地 · TEX');expect(await fs.readFile(path.join(home,'export.tex'),'utf8')).toContain('\\frac{1}{n}');if(process.platform==='win32')await fs.access(path.join(home,'paper-companion-cjk.otf'));await page.locator('#close-export').click();
   await page.locator('#switch').click();await expect(page.locator('#view-label')).toHaveText('原文');await page.locator('#switch').click();await expect(page.locator('#view-label')).toHaveText('LaTeX 译文');
   await page.locator('#report').click();await expect(page.locator('#export-dialog')).toBeVisible({timeout:240000});await expect(page.locator('#export-pdf')).toBeEnabled();await page.locator('#export-tex').click();await expect(page.locator('#status')).toHaveText('已保存到本地 · TEX');expect(await fs.readFile(path.join(home,'export.tex'),'utf8')).toContain('学习报告');await page.locator('#close-export').click();

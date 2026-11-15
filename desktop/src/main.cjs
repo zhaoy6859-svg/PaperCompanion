@@ -5,7 +5,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
 const {pathToFileURL} = require('node:url');
-const {TRANSLATION_PROMPT, endpoint, streamCompletion, latexDocument} = require('./core.cjs');
+const {TRANSLATION_PROMPT, endpoint, streamCompletion, latexDocument, needsTableRepair} = require('./core.cjs');
 const testing = !app.isPackaged && process.env.PC_E2E === '1';
 if (testing && process.env.PC_TEST_HOME) app.setPath('userData', process.env.PC_TEST_HOME);
 const shared = app.isPackaged ? path.join(process.resourcesPath,'shared') : path.resolve(__dirname,'../../Resources');
@@ -66,8 +66,10 @@ function handle(channel, callback) {
     return callback(...args);
   });
 }
+const LEGACY_PROMPT = '精翻，不能机翻。准确、自然、符合学术表达。保留标题、作者、章节层级、段落、表格及公式编号。只输出译文，不添加原文页码标题和页眉页脚。数学必须用 $...$ 或 $$...$$ 的 LaTeX 表达。无法可靠识别的公式标注【公式识别待核对】，不得猜测。';
 app.whenReady().then(async() => {
   settings = {...defaults,...await readJSON(path.join(root(),'settings.json'),{})};
+  if (settings.prompt === LEGACY_PROMPT) settings.prompt = TRANSLATION_PROMPT;
   protocol.handle('companion',request => {
     const url = new URL(request.url); const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
     const file = path.resolve(shared,rel);
@@ -103,6 +105,7 @@ app.whenReady().then(async() => {
     try { return await streamCompletion({...settings,apiKey:key()},messages,controller.signal,delta=>win?.webContents.send('ai:delta',{id,delta})); }
     finally {clearTimeout(timeout);requests.delete(id);}
   });
+  handle('text:needs-table-repair',(text) => typeof text === 'string' && text.length < 2000000 && needsTableRepair(text));
   handle('tex:compile',async(id,markdown,layout) => { requireDoc(id); if(typeof markdown !== 'string'||markdown.length>2000000) throw new Error('文档内容过长'); return compile(markdown,layout); });
   handle('file:export',async(id,kind) => {
     const out=outputs.get(id); if(!out) throw new Error('请先生成文档');

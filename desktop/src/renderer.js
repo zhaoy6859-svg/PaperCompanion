@@ -89,7 +89,7 @@ $('pdf').addEventListener('mouseup',()=>{
   const groups=selectionGroups();
   if(groups.length){pendingHighlight=groups;showSelectionBar();}
 });
-function translationKey(){return JSON.stringify([settings.language,settings.prompt,'windows-v1']);}
+function translationKey(){return JSON.stringify([settings.language,settings.prompt,'windows-v2']);}
 async function pageImages(index){const page=await original.getPage(index+1),base=page.getViewport({scale:1}),viewport=page.getViewport({scale:Math.min(2.5,1800/base.width)});const canvas=document.createElement('canvas');canvas.width=viewport.width;canvas.height=viewport.height;await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;const images=[];for(let half=0;half<2;half++){const part=document.createElement('canvas');part.width=canvas.width;part.height=Math.ceil(canvas.height/2);part.getContext('2d').drawImage(canvas,0,half*canvas.height/2,canvas.width,canvas.height/2,0,0,part.width,part.height);images.push({type:'image_url',image_url:{url:part.toDataURL('image/jpeg',0.88),detail:'high'}});}return images;}
 async function translate(){
   if(translating){translationStop=true;await api.cancel(translationRequest);return;}
@@ -103,7 +103,16 @@ async function translate(){
       const content=[{type:'text',text:'请翻译以下文献内容。文字可能有公式提取错误，以图片为准核对。\n'+pages[i]}];
       if(config.vision)content.push(...await pageImages(i));
       if(translationStop)throw new Error('翻译已停止');
-      cache[i]=await request([{role:'system',content:config.prompt+'\n目标语言：'+config.language+'\n保留 Markdown 标题层级和数学 LaTeX，不添加原文页码标题。'}, {role:'user',content}],()=>{},id=>translationRequest=id);await save();
+      cache[i]=await request([{role:'system',content:config.prompt+'\n目标语言：'+config.language+'\n保留 Markdown 标题层级和数学 LaTeX；表格必须用 Markdown 管道表（每行以 | 开头结尾，第二行 | --- |），不要用空格对齐或逐行罗列；公式下标用 _{...}、上标用 ^{...}；图表只翻译图注和表题，不转写坐标轴刻度。不添加原文页码标题。'}, {role:'user',content}],()=>{},id=>translationRequest=id);
+      if(await api.needsTableRepair(cache[i])){
+        status(`第 ${i+1} 页含表格，正在整理成 Markdown 表格…`);
+        const repaired=await request([
+          {role:'system',content:'你在修正论文译文里的表格排版。只把其中的表格（表题和数据行）改写为 Markdown 管道表：每行以 | 开头和结尾，第二行是 | --- | --- |；保持其他段落、公式、编号和顺序完全不变，不新增也不删减内容；无法确定列数时按数据列对齐。只输出修正后的整页译文。'},
+          {role:'user',content:cache[i]}
+        ],()=>{},id=>translationRequest=id);
+        if(typeof repaired==='string'&&repaired.includes('|'))cache[i]=repaired;
+      }
+      await save();
     }
     progress('精翻完成 · 正在排版正文和公式',null);$('translate').textContent='正在排版…';$('translate').disabled=true;
     const output=await api.compile(paper.id,pages.map((_,i)=>cache[i]).join('\n\n'),layout);translationOutput=output;exportOutput=output;$('export').disabled=false;

@@ -18,6 +18,8 @@ Region capture ("框选") rasterizes the selected part of the page and, when pag
 
 Highlights are stored with the paper, drawn over the page, and can carry a note; the right sidebar has a "笔记" tab to review and edit them.
 
+Tables: the translation prompt now requires Markdown pipe tables (outer pipes and a `| --- |` separator), and a page whose translated table still looks like space-aligned rows is sent through one extra "reshape into a Markdown table" pass before typesetting. The translation cache key was bumped, so existing papers translate again instead of reusing flattened tables. For table-heavy pages, enable page images and use a vision-capable model; without an image the model only sees flattened PDF text.
+
 Windows still does not implement independent per-provider keys or automatic cross-platform data migration. Scan-only PDFs require an image-capable model for translation. Mixed-column figures and exact source page alignment are not reconstructed. Language entry is unrestricted, but rare scripts can require additional fonts/typesetting support.
 
 The package is unsigned by default: SmartScreen may show an unknown publisher. The 2.4.1 preview was demoed on real Windows 10/11 hardware by an early tester (2026-11-15); CI additionally runs unit, Electron UI, LaTeX, packaging and packaged-app checks on windows-2022.

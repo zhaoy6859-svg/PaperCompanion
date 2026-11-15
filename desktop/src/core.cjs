@@ -4,8 +4,8 @@ const LEVELS = {
   intermediate: '了解基础：梳理方法、推理和关键证据，补足必要的推导。',
   advanced: '比较熟悉：深入推导、假设、创新、局限和与既有工作的关系。'
 };
-const TRANSLATION_PROMPT = '精翻，不能机翻。准确、自然、符合学术表达。保留标题、作者、章节层级、段落、表格及公式编号。只输出译文，不添加原文页码标题和页眉页脚。数学必须用 $...$ 或 $$...$$ 的 LaTeX 表达。无法可靠识别的公式标注【公式识别待核对】，不得猜测。';
-function cacheKey(language, prompt) { return crypto.createHash('sha256').update(JSON.stringify([language.trim(), prompt, 'windows-v1'])).digest('hex'); }
+const TRANSLATION_PROMPT = '精翻，不能机翻。准确、自然、符合学术表达。保留标题、作者、章节层级、段落、列表和公式编号。数学必须用 LaTeX（$...$ 或 $$...$$），下标用 _{...}、上标用 ^{...}，不要输出 β10 这类纯文本或 Unicode 公式。所有表格必须输出为 Markdown 管道表：每行以 | 开头和结尾，第二行是 | --- | --- |；不得用空格对齐、制表符或逐行罗列；合并单元格用重复表头或留空。图表只翻译图注和表题，不要转写图内坐标轴刻度或图例数字。只输出译文，不添加原文页码标题和页眉页脚。无法可靠识别的公式标注【公式识别待核对】，不得猜测。';
+function cacheKey(language, prompt) { return crypto.createHash('sha256').update(JSON.stringify([language.trim(), prompt, 'windows-v2'])).digest('hex'); }
 function recentStart(threads) {
   let count = 0, start = threads.length;
   while (start > 0 && threads.length - start < 24) {
@@ -75,6 +75,14 @@ function bodyTex(markdown) {
   }
   return out.join('\n') + '\n';
 }
+function needsTableRepair(text) {
+  if (typeof text !== 'string' || !text.trim()) return false;
+  if (/(^|\n)\s*\|[^\n]*\|/.test(text)) return false;
+  const caption = /(^|\n)\s*(表|Table)\s*[0-9一二三四五六七八九十]+/i;
+  const numericRows = /(^|\n)[^\n]*\d+\.\d+[^\n]*\s+[^\n]*\d+\.\d+/;
+  return caption.test(text) && numericRows.test(text);
+}
+
 function latexDocument(markdown, layout = {}, platform = process.platform) {
   const clamp = (v, fallback, low, high) => Number.isFinite(v) ? Math.min(high, Math.max(low, v)) : fallback;
   const width = clamp(layout.width, 595.28, 250, 1500), height = clamp(layout.height, 841.89, 250, 1800);
@@ -126,4 +134,4 @@ async function streamCompletion(settings, messages, signal, onDelta) {
   if (!result.trim()) throw new Error('模型未返回内容');
   return result;
 }
-module.exports = {LEVELS, TRANSLATION_PROMPT, cacheKey, recentStart, memoryBatch, escapeTex, mathTex, bodyTex, latexDocument, endpoint, streamCompletion};
+module.exports = {LEVELS, TRANSLATION_PROMPT, cacheKey, recentStart, memoryBatch, escapeTex, mathTex, bodyTex, latexDocument, needsTableRepair, endpoint, streamCompletion};

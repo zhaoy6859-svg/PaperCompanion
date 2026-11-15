@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('companion',{
   cancel:id=>ipcRenderer.invoke('ai:cancel',id),
   onDelta:callback=>{const listener=(_event,value)=>callback(value);ipcRenderer.on('ai:delta',listener);return()=>ipcRenderer.removeListener('ai:delta',listener);},
   compile:(id,markdown,layout)=>ipcRenderer.invoke('tex:compile',id,markdown,layout),
-  export:(id,kind)=>ipcRenderer.invoke('file:export',id,kind)
+  export:(id,kind)=>ipcRenderer.invoke('file:export',id,kind),
+  needsTableRepair:text=>ipcRenderer.invoke('text:needs-table-repair',text)
 });
