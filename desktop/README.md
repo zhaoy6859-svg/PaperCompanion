@@ -20,7 +20,16 @@ Highlights are stored with the paper, drawn over the page, and can carry a note;
 
 Windows still does not implement independent per-provider keys or automatic cross-platform data migration. Scan-only PDFs require an image-capable model for translation. Mixed-column figures and exact source page alignment are not reconstructed. Language entry is unrestricted, but rare scripts can require additional fonts/typesetting support.
 
-The package is unsigned: SmartScreen may show an unknown publisher. This release has cloud Windows tests, not physical Windows 10/11 device certification.
+The package is unsigned by default: SmartScreen may show an unknown publisher. This release has cloud Windows tests, not physical Windows 10/11 device certification.
+
+### Code signing
+
+A trusted signature needs a Windows code-signing certificate; there is no way to remove the SmartScreen warning without one. Once you have an OV/EV certificate (`.pfx`) or Azure Trusted Signing, add repository secrets:
+
+- `WINDOWS_CSC_LINK` — base64 of the `.pfx` (or a URL electron-builder can read)
+- `WINDOWS_CSC_KEY_PASSWORD` — its password
+
+The Windows workflow passes them to electron-builder, which signs the `.exe` and the installer automatically. Until then, testers should verify `SHA256SUMS.txt` from the release and use "More info → Run anyway".
 
 ## Development
 
