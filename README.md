@@ -29,6 +29,8 @@
 
 > 只阅读和问答不需要额外依赖；要让「译文 / 学习报告」排版跑通，需要本机安装 MacTeX 或 TeX Live（`xelatex`）。
 
+**Windows 预览版**：`desktop/` 下是 Electron 桌面版（Windows 10/11 x64），安装包见 [Windows Release](https://github.com/zhaoy6859-svg/PaperCompanion/releases)。支持 PDF 阅读、AI 问答、LaTeX 译文、划线笔记和框选识别；框选识别调用你配置的视觉模型，不是离线 OCR。
+
 觉得有用的话，点右上角 ⭐ **Star** 支持一下，也欢迎邮件交流：**zhaoy6859@gmail.com**
 
 ![论文伴侣：大肥鱼欢迎页](docs/welcome.png)

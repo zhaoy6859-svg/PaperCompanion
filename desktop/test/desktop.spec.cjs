@@ -10,6 +10,7 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
  const calls=[];let failNext=false;
  const server=http.createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;const request=JSON.parse(body);calls.push(request);if(failNext){failNext=false;res.writeHead(500);res.end();return;}const system=request.messages[0].content;let answer;
   if(system.includes('学习记忆'))answer='早期记忆：用户关注经验风险、参数含义和泛化误差。';
+  else if(system.includes('OCR'))answer='经验风险 是训练集上的平均损失。';
   else if(system.includes('学习报告'))answer='# 学习报告\n\n## 核心概念\n经验风险是平均损失。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n## 待追问\n如何评估泛化误差？';
   else if(system.includes('目标语言'))answer='# Research Paper\n\n## Empirical risk\nThe **average loss** is defined by\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n| Symbol | Meaning |\n| --- | --- |\n| $n$ | sample size |';
   else answer='## 经验风险\n\n**平均损失**衡量训练样本误差。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n<script>window.hacked=true</script>';
@@ -25,6 +26,45 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   await expect(page.locator('.pdf-page canvas')).toHaveCount(1);await expect(page.locator('.textLayer')).toContainText('Empirical risk');
   await page.locator('#question').fill('请解释经验风险');await expect(page.locator('#question')).toHaveValue('请解释经验风险');await page.locator('#send').click();await expect(page.locator('#conversation .katex')).toBeVisible();await expect(page.locator('#send')).toBeEnabled();expect(await page.evaluate(()=>window.hacked)).toBeUndefined();
   expect(calls.at(-1).messages[0].content).toContain('完全陌生');
+
+  // Highlight the selected sentence, then add a note from the notes tab.
+  await page.evaluate(()=>{
+    const layer=document.querySelector('.textLayer');
+    const node=[...layer.querySelectorAll('span')].find(s=>s.textContent.includes('Empirical'));
+    const range=document.createRange();range.selectNodeContents(node);
+    const sel=getSelection();sel.removeAllRanges();sel.addRange(range);
+    document.getElementById('pdf').dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
+  });
+  await expect(page.locator('#selection-bar')).toBeVisible();
+  await expect(page.locator('.highlight')).toHaveCount(0);
+  await page.locator('#mark-highlight').click();
+  await expect(page.locator('.highlight')).toHaveCount(1);
+  await page.locator('[data-tab="notes"]').click();
+  await expect(page.locator('.note-item')).toHaveCount(1);
+  await page.locator('.note-item').click();
+  await page.locator('#note-text').fill('经验风险是训练集上的平均损失。');
+  await page.locator('#save-note').click();
+  await expect(page.locator('.note-item .note-body')).toHaveText('经验风险是训练集上的平均损失。');
+  await page.locator('[data-tab="chat"]').click();
+
+  // Region capture uses the vision model for transcription.
+  await page.locator('#settings').click();
+  await page.locator('#vision').check();
+  await page.getByRole('button',{name:'保存设置',exact:true}).click();
+  await page.locator('#region').click();
+  const pageBox=await page.locator('.pdf-page').boundingBox();
+  await page.mouse.move(pageBox.x+40,pageBox.y+40);
+  await page.mouse.down();
+  await page.mouse.move(pageBox.x+330,pageBox.y+140,{steps:6});
+  await page.mouse.up();
+  await expect(page.locator('#selected')).toBeVisible({timeout:30000});
+  await expect(page.locator('#selected')).toContainText('经验风险');
+  const ocrCall=calls.find(c=>String(c.messages[0].content).includes('OCR'));
+  expect(ocrCall).toBeTruthy();
+  expect(Array.isArray(ocrCall.messages[1].content)).toBeTruthy();
+  expect(ocrCall.messages[1].content.some(part=>part.type==='image_url')).toBeTruthy();
+  await page.screenshot({path:testInfo.outputPath('region-ocr.png')});
+  await page.locator('#clear-selection').click();
   await page.locator('#translate').click();await expect(page.locator('#progress')).toBeVisible();
   expect(await page.locator('#progress').evaluate(el=>getComputedStyle(el).pointerEvents)).toBe('none');
   await page.locator('#question').click();await expect(page.locator('#question')).toBeFocused();
@@ -37,7 +77,7 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   failNext=true;await page.locator('#question').fill('重试测试');await page.locator('#send').click();await expect(page.locator('#status')).toContainText('HTTP 500');await expect(page.locator('#question')).toHaveValue('重试测试');
   expect(errors).toEqual([]);await app.close();app=null;
   // Seed a long saved history to exercise summary batching through the actual UI.
-  const dir=path.join(home,'papers'),files=await fs.readdir(dir),statePath=path.join(dir,files[0]);const state=JSON.parse(await fs.readFile(statePath,'utf8'));expect(state.level).toBe('beginner');expect(state.threads).toHaveLength(1);state.threads=Array.from({length:35},(_,i)=>({question:'问题'+i,answer:'需要记住的解释。'.repeat(160),page:0}));await fs.writeFile(statePath,JSON.stringify(state));
+  const dir=path.join(home,'papers'),files=await fs.readdir(dir),statePath=path.join(dir,files[0]);const state=JSON.parse(await fs.readFile(statePath,'utf8'));expect(state.level).toBe('beginner');expect(state.threads).toHaveLength(1);expect(state.highlights).toHaveLength(1);expect(state.highlights[0].note).toContain('训练集上的平均损失');state.threads=Array.from({length:35},(_,i)=>({question:'问题'+i,answer:'需要记住的解释。'.repeat(160),page:0}));await fs.writeFile(statePath,JSON.stringify(state));
   app=await launch();page=await app.firstWindow();await page.locator('#resume').click();await expect(page.locator('#level-dialog')).not.toBeVisible();await expect(page.locator('#conversation .turn')).toHaveCount(35);await page.locator('#question').fill('继续解释');await page.locator('#send').click();await expect(page.locator('#send')).toBeEnabled({timeout:30000});
   expect(calls.some(c=>c.messages[0].content.includes('学习记忆'))).toBeTruthy();const latest=calls.at(-1);expect(latest.messages.length).toBeLessThanOrEqual(51);expect(latest.messages.some(m=>m.content.includes('此前交流摘要'))).toBeTruthy();
  }finally{if(app)await app.close();server.close();}

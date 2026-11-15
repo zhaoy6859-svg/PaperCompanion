@@ -66,6 +66,11 @@ jobs:
         with:
           name: PaperCompanion-Windows-x64
           path: artifacts
+      - name: SHA-256 checksums
+        run: |
+          cd artifacts
+          sha256sum *.exe *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
           prerelease: true
@@ -80,5 +85,6 @@ jobs:
             已在 GitHub Actions Windows Server 2022 环境运行真实 Electron 界面、模拟模型、LaTeX PDF 编译、导出、长对话和打包启动测试。
 
             此版本尚未进行实体 Windows 10/11 设备验收，也未进行 Windows 代码签名。
-            首次运行可能出现 SmartScreen 提示；请核对下载来源为本仓库 Releases。
-            Windows 暂不包含 macOS 的框选 OCR、划线笔记和每服务独立 Key。复杂图表布局与公式识别仍需核对原文。
+            首次运行可能出现 SmartScreen 提示；请核对下载来源为本仓库 Releases，并用下方的 `SHA256SUMS.txt` 校验文件。
+            Windows 已移植划线笔记与框选识别：划线存于论文记录中；框选会调用你配置的视觉模型转写文字（需开启页面图片），不是离线 OCR。
+            Windows 暂不包含每服务独立 Key 和跨平台数据迁移。复杂图表布局与公式识别仍需核对原文。

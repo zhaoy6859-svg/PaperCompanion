@@ -12,7 +12,13 @@ The Windows distribution includes Tectonic 0.15.0 and a Noto CJK font. First PDF
 
 Windows API keys are encrypted using Electron safeStorage (Windows DPAPI). Settings and paper histories live under `%APPDATA%/paper-companion-desktop/` (the runtime's Electron userData directory). A key encrypted for one Windows account cannot be copied to another account; enter it again there. Text and optional page images are sent only to the configured model endpoint. Chat rendering has no CDN dependencies.
 
-This first Windows preview supports PDF text selection, continuous reading, three familiarity levels, multi-language translation, LaTeX PDF/TeX export, right-hand AI chat, persisted conversation summaries, and learning reports. Windows does not yet implement the macOS region OCR, persistent highlight notes, independent per-provider keys, or automatic cross-platform data migration. Scan-only PDFs require an image-capable model for translation. Mixed-column figures and exact source page alignment are not reconstructed. Language entry is unrestricted, but rare scripts can require additional fonts/typesetting support.
+This Windows preview supports PDF text selection, continuous reading, three familiarity levels, multi-language translation, LaTeX PDF/TeX export, right-hand AI chat, persisted conversation summaries, learning reports, persistent highlight notes, and region capture with OCR.
+
+Region capture ("框选") rasterizes the selected part of the page and, when page images are enabled, asks the configured **vision model** to transcribe it; the crop is also attached to the next question. It is not an offline OCR engine: enable "发送论文页面图片" and use a vision-capable model. Without vision, the crop is kept but no text is extracted.
+
+Highlights are stored with the paper, drawn over the page, and can carry a note; the right sidebar has a "笔记" tab to review and edit them.
+
+Windows still does not implement independent per-provider keys or automatic cross-platform data migration. Scan-only PDFs require an image-capable model for translation. Mixed-column figures and exact source page alignment are not reconstructed. Language entry is unrestricted, but rare scripts can require additional fonts/typesetting support.
 
 The package is unsigned: SmartScreen may show an unknown publisher. This release has cloud Windows tests, not physical Windows 10/11 device certification.
 
