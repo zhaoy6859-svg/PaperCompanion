@@ -1,6 +1,6 @@
 # 参与贡献
 
-感谢你对论文伴侣的兴趣！这是一个 macOS 原生 App，代码量不大，欢迎提 Issue 或 PR。
+感谢你对论文伴侣的兴趣！项目包含 macOS 原生版和 Windows 桌面预览版，代码量不大，欢迎提 Issue 或 PR。
 
 ## 环境
 
@@ -54,3 +54,7 @@ swiftc -framework AppKit -framework PDFKit Sources/Models.swift Sources/Conversa
 ## 联系
 
 有任何问题欢迎邮件交流：**zhaoy6859@gmail.com**
+
+## Windows 开发与云端测试
+
+Windows 代码在 `desktop/`；先 `npm ci`，再 `npm test`。Windows 上运行 `npm run fetch:tex`、`npm run test:e2e`、`npm run build:win`。完整说明见 [desktop/README.md](desktop/README.md)。`.github/workflows/windows.yml` 在 Windows 云端验证真实 UI、模拟模型和 PDF 编译，上传截图及安装包。macOS Swift 构建保持独立。

@@ -14,3 +14,9 @@ xcuserdata/
 
 # Local test artefacts
 *.log
+
+# Cross-platform desktop dependencies and test output
+desktop/node_modules/
+desktop/tools/
+desktop/test-results/
+desktop/playwright-report/
