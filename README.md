@@ -15,7 +15,7 @@
 - `.exe`：安装程序；`.zip`：解压后运行 `PaperCompanion.exe`。
 - 保留同一只伴侣，支持 PDF 阅读、熟悉度、右侧问答、长对话记忆、多语言精翻与 LaTeX 学习报告。
 - 自带 Tectonic 排版引擎和中文字体；首次生成 PDF 需要联网下载 TeX 排版资源。
-- 已配置真实 Windows 云端 UI / 编译 / 打包测试
+- 已配置真实 Windows 云端 UI / 编译 / 打包测试；首版仍为预览版，尚未做实体 Windows 10/11 验收，也未进行 Windows 代码签名。
 - Windows 暂未移植框选 OCR、划线笔记、每服务独立 Key。详情和构建说明见 [desktop/README.md](desktop/README.md)。
 
 ## ⬇️ macOS 下载安装
@@ -29,7 +29,7 @@
 
 > 只阅读和问答不需要额外依赖；要让「译文 / 学习报告」排版跑通，需要本机安装 MacTeX 或 TeX Live（`xelatex`）。
 
-**Windows 预览版**：`desktop/` 下是 Electron 桌面版（Windows 10/11 x64），安装包见 [Windows Release](https://github.com/zhaoy6859-svg/PaperCompanion/releases)。支持 PDF 阅读、AI 问答、LaTeX 译文、划线笔记和框选识别；框选识别调用你配置的视觉模型，不是离线 OCR。
+**Windows 预览版**：`desktop/` 下是 Electron 桌面版（Windows 10/11 x64），安装包见 [Windows Release](https://github.com/zhaoy6859-svg/PaperCompanion/releases)。支持 PDF 阅读、AI 问答、LaTeX 译文、划线笔记和框选识别，已在 Windows 10/11 实机演示通过；框选识别调用你配置的视觉模型，不是离线 OCR。
 
 觉得有用的话，点右上角 ⭐ **Star** 支持一下，也欢迎邮件交流：**zhaoy6859@gmail.com**
 
