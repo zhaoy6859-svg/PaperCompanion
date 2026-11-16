@@ -3,13 +3,27 @@
 [![Build](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml/badge.svg)](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/zhaoy6859-svg/PaperCompanion)](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest)
 [![License](https://img.shields.io/github/license/zhaoy6859-svg/PaperCompanion)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-black)](#安装)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-black)](#安装)
+[![Windows](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/windows.yml/badge.svg)](https://github.com/zhaoy6859-svg/PaperCompanion/actions/workflows/windows.yml)
 
-**macOS 原生论文精读 App**：左边读 PDF，右边是 AI 伴侣。译文由 XeLaTeX 按原文版式重排，问答支持 Markdown / 公式 / 表格，可接任意 OpenAI 兼容模型（默认 DeepSeek）。
+**论文精读 App（macOS 原生版 + Windows 桌面预览版）**：左边读 PDF，右边是 AI 伴侣。译文由 XeLaTeX 按原文版式重排，问答支持 Markdown / 公式 / 表格，可接任意 OpenAI 兼容模型（默认 DeepSeek）。
 
-## ⬇️ 直接下载安装
+## Windows 桌面预览版
 
-**[下载 论文伴侣 2.3.0（macOS 13+）](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest)** · DMG 5.9 MB
+**[下载 Windows 版 2.4.3](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.4.3-windows-beta.1)** · Windows 10/11 x64 · **已在实机演示通过**
+
+- `.exe` 安装程序；`.zip` 解压后运行 `PaperCompanion.exe`
+- 同一只伴侣：PDF 阅读、熟悉度、右侧问答、长对话记忆、多语言精翻、LaTeX 学习报告
+- 已移植**划线笔记**（页面上高亮、点开写笔记、右侧「笔记」页）和**框选识别**（截图交给视觉模型转写，需开启页面图片，不是离线 OCR）
+- 自带 Tectonic 排版引擎与中文字体；首次生成 PDF 需联网下载 TeX 排版资源
+- 阅读区与对话区之间可拖动调宽，宽度自动记住
+- 修复 `\top` 等常见公式命令导致的「不支持的 LaTeX 命令」；回答结构对齐网页版助手
+- 安装包未签名：SmartScreen 提示时选「更多信息 → 仍要运行」，可用 [SHA256SUMS.txt](https://github.com/zhaoy6859-svg/PaperCompanion/releases/download/v2.4.3-windows-beta.1/SHA256SUMS.txt) 校验
+- 每服务独立 Key、跨平台数据迁移尚未移植；细节见 [desktop/README.md](desktop/README.md)
+
+## ⬇️ macOS 下载安装
+
+**[下载 论文伴侣 2.3.1（macOS 13+）](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.3.1)** · DMG 5.9 MB
 
 1. 打开上面的 Release 页面，下载 `PaperCompanion-2.3.1.dmg`
 2. 把「论文伴侣」拖进「应用程序」
@@ -18,11 +32,13 @@
 
 > 只阅读和问答不需要额外依赖；要让「译文 / 学习报告」排版跑通，需要本机安装 MacTeX 或 TeX Live（`xelatex`）。
 
+2.3.1：伴侣回答改为网页版结构（结论 → 原文引用 → 逐符号解释 → 类比/边界，数学强制 LaTeX）；阅读区与对话区可拖动调宽并记住宽度。
+
 觉得有用的话，点右上角 ⭐ **Star** 支持一下，也欢迎邮件交流：**zhaoy6859@gmail.com**
 
 ![论文伴侣：大肥鱼欢迎页](docs/welcome.png)
 
-<sub>**English** — Paper Companion is a native macOS app for reading papers: a PDF reader with an AI companion, Markdown/KaTeX chat, and on-demand XeLaTeX typeset translations that keep the paper's page size, margins and columns. Works with DeepSeek (default) and any OpenAI-compatible API. [Download the latest release](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest).</sub>
+<sub>**English** — Paper Companion is a paper reading app with a native macOS edition and a Windows desktop preview: a PDF reader with an AI companion, Markdown/KaTeX chat, and on-demand XeLaTeX typeset translations that keep the paper's page size, margins and columns. Works with DeepSeek (default) and any OpenAI-compatible API. [Download the latest release](https://github.com/zhaoy6859-svg/PaperCompanion/releases/latest).</sub>
 
 ## 界面
 
