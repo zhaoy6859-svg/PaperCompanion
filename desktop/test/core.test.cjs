@@ -29,3 +29,9 @@ test('flattened tables are detected and the prompt demands pipe tables',()=>{
   assert.match(TRANSLATION_PROMPT,/Markdown 管道表/);
   assert.match(TRANSLATION_PROMPT,/下标用 _\{\.\.\.\}/);
 });
+
+test('common math commands such as \\top pass while dangerous primitives stay blocked',()=>{
+  assert.equal(mathTex('u^{\\top}\\nabla_\\theta f(X^{(i)},Y^{(i)})'),'u^{\\top}\\nabla_\\theta f(X^{(i)},Y^{(i)})');
+  assert.equal(mathTex('\\operatorname*{arg\\,min}_x f(x)'),'\\operatorname*{arg\\,min}_x f(x)');
+  for(const bad of ['\\input{secret}','\\write18{cmd}','\\csname input\\endcsname','\\directlua{os.execute("x")}']) assert.throws(()=>mathTex(bad));
+});

@@ -25,6 +25,15 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   await page.locator('#settings').click();await page.locator('#base-url').fill('http://127.0.0.1:'+server.address().port+'/v1');await page.locator('#model').fill('mock');await page.locator('#language').fill('English');await page.getByRole('button',{name:'保存设置',exact:true}).click();
   await page.locator('#welcome-open').click();await expect(page.locator('#level-dialog')).toBeVisible();await page.screenshot({path:testInfo.outputPath('familiarity.png')});await page.locator('[data-level="beginner"]').click();await page.locator('#start-reading').click();await expect(page.locator('#level-dialog')).not.toBeVisible();
   await expect(page.locator('.pdf-page canvas')).toHaveCount(1);await expect(page.locator('.textLayer')).toContainText('Empirical risk');
+
+  // Reader / chat widths are draggable.
+  const sideBefore=await page.locator('aside').boundingBox();
+  const handle=await page.locator('#splitter').boundingBox();
+  await page.mouse.move(handle.x+3,handle.y+160);await page.mouse.down();
+  await page.mouse.move(handle.x-150,handle.y+160,{steps:6});await page.mouse.up();
+  const sideAfter=await page.locator('aside').boundingBox();
+  expect(sideAfter.width).toBeGreaterThan(sideBefore.width+60);
+  await page.screenshot({path:testInfo.outputPath('splitter.png')});
   await page.locator('#question').fill('请解释经验风险');await expect(page.locator('#question')).toHaveValue('请解释经验风险');await page.locator('#send').click();await expect(page.locator('#conversation .katex')).toBeVisible();await expect(page.locator('#send')).toBeEnabled();expect(await page.evaluate(()=>window.hacked)).toBeUndefined();
   expect(calls.at(-1).messages[0].content).toContain('完全陌生');
 
