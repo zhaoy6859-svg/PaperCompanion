@@ -135,6 +135,10 @@ swiftc -parse-as-library -framework AppKit -framework WebKit tests/RichTranscrip
 资源来源和完整插画提示词见 `Resources/Companion/PROVENANCE.md`；本地网页依赖版本和许可见 `Resources/Chat/THIRD_PARTY.md`。
 
 
+## 学习：这个 App 是怎么搭出来的
+
+从窗口、PDF、流式请求、Markdown/KaTeX 渲染、LaTeX 排版到打包与 CI 的完整拆解，包含 8 个里程碑和 5 个练手改动：[docs/BUILDING.md](docs/BUILDING.md)
+
 ## 交流
 
 有任何问题、建议，或者想聊聊论文阅读，都欢迎邮件找我：
