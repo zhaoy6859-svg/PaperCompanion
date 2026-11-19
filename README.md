@@ -10,7 +10,7 @@
 
 ## Windows 桌面预览版
 
-**[下载 Windows 版 2.4.3](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.4.3-windows-beta.1)** · Windows 10/11 x64 · **已在实机演示通过**
+**[下载 Windows 版 2.5.1](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.5.1-windows-beta.1)** · Windows 10/11 x64 · **已在实机演示通过**
 
 - `.exe` 安装程序；`.zip` 解压后运行 `PaperCompanion.exe`
 - 同一只伴侣：PDF 阅读、熟悉度、右侧问答、长对话记忆、多语言精翻、LaTeX 学习报告
@@ -18,7 +18,8 @@
 - 自带 Tectonic 排版引擎与中文字体；首次生成 PDF 需联网下载 TeX 排版资源
 - 阅读区与对话区之间可拖动调宽，宽度自动记住
 - 修复 `\top` 等常见公式命令导致的「不支持的 LaTeX 命令」；回答结构对齐网页版助手
-- 安装包未签名：SmartScreen 提示时选「更多信息 → 仍要运行」，可用 [SHA256SUMS.txt](https://github.com/zhaoy6859-svg/PaperCompanion/releases/download/v2.4.3-windows-beta.1/SHA256SUMS.txt) 校验
+- API Key 按服务地址隔离；支持只读工具 `get_paper_page`；429/5xx 未输出正文前有限重试并遵守 `Retry-After`，401 不重试，断流保留已生成内容
+- 安装包未签名：SmartScreen 提示时选「更多信息 → 仍要运行」，可用 [SHA256SUMS.txt](https://github.com/zhaoy6859-svg/PaperCompanion/releases/download/v2.5.1-windows-beta.1/SHA256SUMS.txt) 校验
 - 每服务独立 Key、跨平台数据迁移尚未移植；细节见 [desktop/README.md](desktop/README.md)
 
 ## ⬇️ macOS 下载安装
