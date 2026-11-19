@@ -29,7 +29,7 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
  let app;const launch=()=>electron.launch({args:[path.resolve(__dirname,'..')],env:{...process.env,PC_E2E:'1',PC_TEST_HOME:home,PC_TEST_PDF:file}});
  try{
   app=await launch();let page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await expect(page.locator('#welcome')).toBeVisible();await page.screenshot({path:testInfo.outputPath('welcome.png')});
+  await expect(page.locator('#welcome')).toBeVisible();await page.waitForFunction(()=>window.__pcReady===true);await page.screenshot({path:testInfo.outputPath('welcome.png')});
   await page.locator('#settings').click();await page.locator('#base-url').fill('http://127.0.0.1:'+server.address().port+'/v1');await page.locator('#model').fill('mock');await page.locator('#language').fill('English');await page.getByRole('button',{name:'保存设置',exact:true}).click();
   await page.locator('#welcome-open').click();await expect(page.locator('#level-dialog')).toBeVisible();await page.screenshot({path:testInfo.outputPath('familiarity.png')});await page.locator('[data-level="beginner"]').click();await page.locator('#start-reading').click();await expect(page.locator('#level-dialog')).not.toBeVisible();
   await expect(page.locator('.pdf-page canvas')).toHaveCount(1);await expect(page.locator('.textLayer')).toContainText('Empirical risk');

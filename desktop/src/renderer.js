@@ -462,4 +462,4 @@ $('splitter').addEventListener('dblclick',()=>{
 });
 
 
-settings=await api.settings();$('resume').hidden=!settings.lastFile;
+settings=await api.settings();$('resume').hidden=!settings.lastFile;window.__pcReady=true;

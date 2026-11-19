@@ -32,6 +32,7 @@ test('switching the service URL never sends the previous service its key', async
     app=await electron.launch({args:[path.resolve(__dirname,'..')],env:{...process.env,PC_E2E:'1',PC_TEST_HOME:home,PC_TEST_PDF:file}});
     const page=await app.firstWindow();
     await expect(page.locator('#welcome')).toBeVisible();
+    await page.waitForFunction(()=>window.__pcReady===true);
     await page.locator('#settings').click();
     await page.locator('#base-url').fill(a.url);
     await page.locator('#model').fill('mock');
