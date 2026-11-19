@@ -1,13 +1,13 @@
 {
   "name": "paper-companion-desktop",
-  "version": "2.4.3",
+  "version": "2.5.0",
   "description": "Paper Companion for Windows: PDF reading, AI discussion and LaTeX translation",
   "author": "PaperCompanion contributors",
   "license": "MIT",
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/core.test.cjs",
+    "test": "node --test test/core.test.cjs test/reliability.test.cjs test/tool.test.cjs",
     "test:e2e": "playwright test",
     "build:win": "electron-builder --win nsis zip --x64 --publish never",
     "fetch:tex": "node scripts/fetch-tectonic.cjs"

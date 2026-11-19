@@ -109,29 +109,156 @@ function endpoint(base) {
   url.pathname = url.pathname.replace(/\/$/, '').replace(/\/chat\/completions$/, '') + '/chat/completions';
   return url.toString();
 }
-async function streamCompletion(settings, messages, signal, onDelta) {
-  const response = await fetch(endpoint(settings.baseURL), {method:'POST', redirect:'error', signal,
-    headers:{'Content-Type':'application/json', ...(settings.apiKey ? {Authorization:'Bearer ' + settings.apiKey} : {})},
-    body:JSON.stringify({model:settings.model, messages, stream:true, temperature:0.2, max_tokens:8192})});
-  if (!response.ok) throw new Error('模型接口返回 HTTP ' + response.status + '，请检查模型、Key 和额度');
-  let buffer = '', result = '', finished = false; const decoder = new TextDecoder();
+function apiError(code, message, extra = {}) {
+  const error = new Error(message);
+  error.code = code;
+  Object.assign(error, extra);
+  return error;
+}
+function originOf(baseURL) {
+  try { return new URL(baseURL).origin; } catch { return ''; }
+}
+function isLocalOrigin(baseURL) {
+  try { return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(baseURL).hostname); } catch { return false; }
+}
+function keyForOrigin(keys, baseURL) {
+  return (keys && keys[originOf(baseURL)]) || '';
+}
+function retryAfterMs(value) {
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.min(30000, seconds * 1000));
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.max(0, Math.min(30000, date - Date.now())) : 0;
+}
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(apiError('ABORTED', '已取消'));
+    const timer = setTimeout(() => { cleanup(); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); cleanup(); reject(apiError('ABORTED', '已取消')); };
+    function cleanup() { signal?.removeEventListener('abort', onAbort); }
+    signal?.addEventListener('abort', onAbort, {once: true});
+  });
+}
+
+async function attemptStream(settings, messages, signal, onDelta, tools) {
+  const headers = {'Content-Type': 'application/json'};
+  if (settings.apiKey) headers.Authorization = 'Bearer ' + settings.apiKey;
+  const body = {model: settings.model, messages, stream: true, temperature: 0.2, max_tokens: 8192};
+  if (Array.isArray(tools) && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
+  let response;
+  try {
+    response = await fetch(endpoint(settings.baseURL), {method: 'POST', redirect: 'error', signal, headers, body: JSON.stringify(body)});
+  } catch (error) {
+    if (signal?.aborted || error?.name === 'AbortError') throw apiError('ABORTED', '已取消');
+    throw apiError('NETWORK', '网络连接失败，请检查网络或接口地址', {cause: error});
+  }
+  if (!response.ok) {
+    const retryAfter = retryAfterMs(response.headers.get('retry-after'));
+    if (response.status === 401 || response.status === 403) {
+      throw apiError('AUTH', 'API Key 无效或与该服务地址不匹配（HTTP ' + response.status + '），请在设置中检查');
+    }
+    if (response.status === 429 || response.status >= 500) {
+      throw apiError('RETRYABLE', '服务暂时不可用（HTTP ' + response.status + '）', {retryAfterMs: retryAfter, status: response.status});
+    }
+    throw apiError('HTTP', '模型接口返回 HTTP ' + response.status + '，请检查模型、Key 和额度', {status: response.status});
+  }
+  let buffer = '', result = '', finished = false, emitted = false;
+  const toolCalls = [];
+  const decoder = new TextDecoder();
   function parse(line) {
     if (!line.startsWith('data:')) return;
-    const raw = line.slice(5).trim(); if (!raw || raw === '[DONE]') { if(raw) finished = true; return; }
-    const data = JSON.parse(raw); if (data.error) throw new Error('模型接口返回错误，请检查服务设置');
+    const raw = line.slice(5).trim();
+    if (!raw || raw === '[DONE]') { if (raw) finished = true; return; }
+    let data;
+    try { data = JSON.parse(raw); } catch { throw apiError('STREAM', '模型返回了无法解析的数据'); }
+    if (data.error) throw apiError('STREAM', '模型接口返回错误，请检查服务设置');
     const choice = data.choices?.[0];
-    if (choice?.finish_reason === 'length') throw new Error('模型输出被截断，请使用更大输出额度的模型重试');
-    const delta = choice?.delta?.content;
-    if (typeof delta === 'string') { result += delta; onDelta(delta); }
-    if (choice?.finish_reason === 'stop') finished = true;
+    if (!choice) return;
+    if (choice.finish_reason === 'length') throw apiError('LENGTH', '模型输出被截断，请使用更大输出额度的模型重试');
+    const delta = choice.delta;
+    if (typeof delta?.content === 'string' && delta.content) {
+      result += delta.content; emitted = true; onDelta(delta.content);
+    }
+    if (Array.isArray(delta?.tool_calls)) {
+      for (const part of delta.tool_calls) {
+        const index = Number.isInteger(part.index) ? part.index : toolCalls.length;
+        if (!toolCalls[index]) toolCalls[index] = {id: '', type: 'function', function: {name: '', arguments: ''}};
+        const call = toolCalls[index];
+        if (part.id) call.id = part.id;
+        if (part.function?.name) call.function.name += part.function.name;
+        if (part.function?.arguments) call.function.arguments += part.function.arguments;
+      }
+    }
+    if (choice.finish_reason === 'stop' || choice.finish_reason === 'tool_calls') finished = true;
   }
-  for await (const chunk of response.body) {
-    buffer += decoder.decode(chunk, {stream:true}); let end;
-    while ((end = buffer.indexOf('\n')) !== -1) { parse(buffer.slice(0,end).trimEnd()); buffer = buffer.slice(end+1); }
+  try {
+    for await (const chunk of response.body) {
+      buffer += decoder.decode(chunk, {stream: true});
+      let end;
+      while ((end = buffer.indexOf('\n')) !== -1) { parse(buffer.slice(0, end).trimEnd()); buffer = buffer.slice(end + 1); }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) parse(buffer.trim());
+  } catch (error) {
+    if (error?.code) throw Object.assign(error, {partial: result});
+    if (signal?.aborted) throw apiError('ABORTED', '已取消', {partial: result});
+    throw apiError('STREAM', '模型连接意外中断', {partial: result, cause: error});
   }
-  buffer += decoder.decode(); if (buffer.trim()) parse(buffer.trim());
-  if (!finished) throw new Error('模型连接意外中断，未保存不完整回答；请重试');
-  if (!result.trim()) throw new Error('模型未返回内容');
-  return result;
+  if (!finished) throw apiError('STREAM', '模型连接意外中断，回答可能不完整', {partial: result});
+  const calls = toolCalls.filter(Boolean).map(call => ({...call, function: {...call.function, arguments: call.function.arguments || '{}'}}));
+  if (!result.trim() && !calls.length) throw apiError('EMPTY', '模型未返回内容');
+  return {text: result, toolCalls: calls, finishReason: finished ? 'stop' : ''};
 }
-module.exports = {LEVELS, TRANSLATION_PROMPT, cacheKey, recentStart, memoryBatch, escapeTex, mathTex, bodyTex, latexDocument, needsTableRepair, endpoint, streamCompletion};
+
+/**
+ * Calls the model, retrying only recoverable failures that happened before any
+ * text was streamed. Auth errors are never retried; a stream that already showed
+ * text is never replayed, so the caller can keep the partial answer on screen.
+ */
+async function streamCompletion(settings, messages, signal, onDelta, tools = null) {
+  if (!settings.apiKey && !isLocalOrigin(settings.baseURL)) {
+    throw apiError('NO_KEY', '这个服务地址还没有保存 API Key，请在设置中填写');
+  }
+  const retries = Number.isInteger(settings.retries) ? Math.max(0, Math.min(5, settings.retries)) : 2;
+  let emitted = false;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await attemptStream(settings, messages, signal, delta => { emitted = true; onDelta(delta); }, tools);
+    } catch (error) {
+      if (signal?.aborted || error.code === 'ABORTED') throw error;
+      const retryable = error.code === 'RETRYABLE' || error.code === 'NETWORK' || (error.code === 'STREAM' && !emitted);
+      if (!retryable || emitted || attempt > retries) throw error;
+      const backoff = Math.min(8000, 500 * Math.pow(2, attempt - 1));
+      const jittered = Math.round(backoff * (0.8 + Math.random() * 0.4));
+      const delay = Math.max(error.retryAfterMs || 0, jittered);
+      await sleep(delay, signal);
+    }
+  }
+}
+
+async function runToolLoop({messages, tools, callModel, executeTool, maxSteps = 4, isCancelled = () => false, onTool = () => {}}) {
+  const conversation = messages.slice();
+  for (let step = 0; step <= maxSteps; step++) {
+    if (isCancelled()) throw apiError('ABORTED', '已取消');
+    const reply = await callModel(conversation, tools);
+    if (isCancelled()) throw apiError('ABORTED', '已取消');
+    const calls = (reply.toolCalls || []).filter(call => call?.function?.name);
+    if (!calls.length) return {text: reply.text || '', messages: conversation, steps: step};
+    if (step === maxSteps) return {text: reply.text || '', messages: conversation, steps: step, truncated: true};
+    conversation.push({
+      role: 'assistant',
+      content: reply.text || '',
+      tool_calls: calls.map(call => ({id: call.id, type: 'function', function: {name: call.function.name, arguments: call.function.arguments || '{}'}}))
+    });
+    for (const call of calls) {
+      if (isCancelled()) throw apiError('ABORTED', '已取消');
+      const result = await executeTool(call);
+      onTool(call, result);
+      conversation.push({role: 'tool', tool_call_id: call.id, content: JSON.stringify(result)});
+    }
+  }
+  return {text: '', messages: conversation, steps: maxSteps};
+}
+
+module.exports = {LEVELS, TRANSLATION_PROMPT, cacheKey, recentStart, memoryBatch, escapeTex, mathTex, bodyTex, latexDocument, needsTableRepair, endpoint, originOf, keyForOrigin, isLocalOrigin, streamCompletion, runToolLoop, apiError};

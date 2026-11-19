@@ -18,7 +18,7 @@ test('endpoint validates HTTPS and localhost and avoids duplicate completion pat
 test('stream parser handles fragmented UTF-8, rejects truncation and interrupted streams',async()=>{
   let mode='normal';const server=http.createServer((_req,res)=>{res.writeHead(200,{'Content-Type':'text/event-stream'});const s='data: '+JSON.stringify({choices:[{delta:{content:'公式 θ'}}]})+'\n\n';const b=Buffer.from(s);res.write(b.subarray(0,54));res.write(b.subarray(54));if(mode==='normal')res.write('data: [DONE]\n\n');if(mode==='length')res.write('data: {"choices":[{"finish_reason":"length"}]}\n\n');res.end();});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const config={baseURL:'http://127.0.0.1:'+server.address().port,model:'mock'};
-  try{let received='';assert.equal(await streamCompletion(config,[],undefined,s=>received+=s),'公式 θ');assert.equal(received,'公式 θ');mode='length';await assert.rejects(streamCompletion(config,[],undefined,()=>{}),/截断/);mode='broken';await assert.rejects(streamCompletion(config,[],undefined,()=>{}),/中断/);}finally{server.close();}
+  try{let received='';assert.equal((await streamCompletion(config,[],undefined,s=>received+=s)).text,'公式 θ');assert.equal(received,'公式 θ');mode='length';await assert.rejects(streamCompletion(config,[],undefined,()=>{}),/截断/);mode='broken';await assert.rejects(streamCompletion(config,[],undefined,()=>{}),/中断/);}finally{server.close();}
 });
 
 test('flattened tables are detected and the prompt demands pipe tables',()=>{

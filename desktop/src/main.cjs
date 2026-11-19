@@ -5,7 +5,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
 const {pathToFileURL} = require('node:url');
-const {TRANSLATION_PROMPT, endpoint, streamCompletion, latexDocument, needsTableRepair} = require('./core.cjs');
+const {TRANSLATION_PROMPT, endpoint, streamCompletion, latexDocument, needsTableRepair, originOf, keyForOrigin} = require('./core.cjs');
 const testing = !app.isPackaged && process.env.PC_E2E === '1';
 if (testing && process.env.PC_TEST_HOME) app.setPath('userData', process.env.PC_TEST_HOME);
 const shared = app.isPackaged ? path.join(process.resourcesPath,'shared') : path.resolve(__dirname,'../../Resources');
@@ -15,8 +15,13 @@ protocol.registerSchemesAsPrivileged([{scheme:'companion',privileges:{standard:t
 const root = () => app.getPath('userData');
 async function atomic(file, data) { await fs.mkdir(path.dirname(file),{recursive:true}); const tmp = file + '.' + crypto.randomUUID() + '.tmp'; await fs.writeFile(tmp,data,{mode:0o600}); await fs.rename(tmp,file); }
 async function readJSON(file, fallback) { try { return JSON.parse(await fs.readFile(file,'utf8')); } catch(e) { if (e.code === 'ENOENT') return fallback; throw new Error('本地数据读取失败，请备份后检查：' + path.basename(file)); } }
-function publicSettings() { const {encryptedKey, ...rest} = settings; return {...rest,hasKey:!!encryptedKey}; }
-function key() { if (!settings.encryptedKey) return ''; try { return safeStorage.decryptString(Buffer.from(settings.encryptedKey,'base64')); } catch { throw new Error('无法解密 API Key，请在设置中重新输入'); } }
+function publicSettings() { const {encryptedKey, keys, ...rest} = settings; return {...rest, keys:undefined, hasKey: !!keyForOrigin(settings.keys, settings.baseURL)}; }
+function key() {
+  const encrypted = keyForOrigin(settings.keys, settings.baseURL);
+  if (!encrypted) throw new Error('这个服务地址还没有保存 API Key，不会复用其他服务的 Key；请在设置中填写');
+  try { return safeStorage.decryptString(Buffer.from(encrypted,'base64')); }
+  catch { throw new Error('无法解密 API Key，请在设置中重新输入'); }
+}
 function stop() { for (const r of requests.values()) r.abort(); requests.clear(); }
 function requireDoc(id) { if (!active || id !== active.id) throw new Error('论文已切换，请重试'); return active; }
 async function openPDF(file) {
@@ -69,7 +74,14 @@ function handle(channel, callback) {
 const LEGACY_PROMPT = '精翻，不能机翻。准确、自然、符合学术表达。保留标题、作者、章节层级、段落、表格及公式编号。只输出译文，不添加原文页码标题和页眉页脚。数学必须用 $...$ 或 $$...$$ 的 LaTeX 表达。无法可靠识别的公式标注【公式识别待核对】，不得猜测。';
 app.whenReady().then(async() => {
   settings = {...defaults,...await readJSON(path.join(root(),'settings.json'),{})};
+  settings.keys = settings.keys || {};
   if (settings.prompt === LEGACY_PROMPT) settings.prompt = TRANSLATION_PROMPT;
+  if (settings.encryptedKey) {
+    // v2 kept a single key; bind it to the origin it was typed for.
+    settings.keys[originOf(settings.baseURL)] = settings.encryptedKey;
+    delete settings.encryptedKey;
+    await atomic(path.join(root(),'settings.json'),JSON.stringify(settings));
+  }
   protocol.handle('companion',request => {
     const url = new URL(request.url); const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
     const file = path.resolve(shared,rel);
@@ -86,8 +98,14 @@ app.whenReady().then(async() => {
   handle('settings:save',async(value) => {
     endpoint(String(value.baseURL)); if (!String(value.model).trim()) throw new Error('请输入模型名称');
     const next = {...settings,baseURL:String(value.baseURL).trim(),model:String(value.model).trim(),language:String(value.language).trim() || '简体中文',prompt:String(value.prompt).trim() || TRANSLATION_PROMPT,vision:!!value.vision};
-    if (value.apiKey) { if(!safeStorage.isEncryptionAvailable()) throw new Error('系统凭证加密不可用，无法安全保存 Key'); next.encryptedKey = safeStorage.encryptString(String(value.apiKey)).toString('base64'); }
-    if (value.clearKey) delete next.encryptedKey;
+    next.keys = {...(settings.keys || {})};
+    const origin = originOf(next.baseURL);
+    if (value.apiKey) {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('系统凭证加密不可用，无法安全保存 Key');
+      next.keys[origin] = safeStorage.encryptString(String(value.apiKey)).toString('base64');
+    }
+    if (value.clearKey) delete next.keys[origin];
+    delete next.encryptedKey;
     await atomic(path.join(root(),'settings.json'),JSON.stringify(next)); settings=next; return publicSettings();
   });
   handle('paper:open',async(resume=false) => {
@@ -99,10 +117,14 @@ app.whenReady().then(async() => {
   });
   handle('paper:save',async(id,state) => { requireDoc(id); const data=JSON.stringify(state); if(data.length>40*1024*1024) throw new Error('文献记录过大，请先导出报告'); await atomic(path.join(root(),'papers',id+'.json'),data); });
   handle('ai:cancel',(_id) => { if (_id) requests.get(_id)?.abort(); else stop(); });
-  handle('ai:request',async(id,messages) => {
+  handle('ai:request',async(id,messages,tools=null) => {
     if (typeof id !== 'string' || requests.has(id)) throw new Error('重复请求');
     const controller=new AbortController(); requests.set(id,controller); const timeout=setTimeout(()=>controller.abort(),300000);
-    try { return await streamCompletion({...settings,apiKey:key()},messages,controller.signal,delta=>win?.webContents.send('ai:delta',{id,delta})); }
+    try {
+      const apiKey = keyForOrigin(settings.keys, settings.baseURL) ? key() : '';
+      return await streamCompletion({...settings,apiKey},messages,controller.signal,delta=>win?.webContents.send('ai:delta',{id,delta}),tools);
+    }
+    catch (error) { return {error: {message: error.message, code: error.code || 'ERROR', partial: error.partial || ''}}; }
     finally {clearTimeout(timeout);requests.delete(id);}
   });
   handle('text:needs-table-repair',(text) => typeof text === 'string' && text.length < 2000000 && needsTableRepair(text));

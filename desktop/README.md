@@ -60,6 +60,12 @@ The test opens an actual Electron window, uses an ephemeral local mock SSE model
 
 Windows CI runs unit tests, actual UI tests, TeX compilation and export, then builds an NSIS installer and ZIP and verifies the packaged welcome artwork and settings UI. Screenshots, Playwright traces on failure, and reports are uploaded as Actions artifacts. A `v*-windows*` tag publishes a prerelease only after the Windows job succeeds.
 
+## Reliability and read-only tools
+
+- **Credentials are bound to an origin.** Keys are stored per `scheme://host:port`; changing the Base URL (or a provider preset) never reuses a key saved for another service. A public address without a saved key fails with `NO_KEY`; localhost/Ollama may stay keyless. Covered by [`test/keys.spec.cjs`](test/keys.spec.cjs) (two real local servers; asserts service B never receives service A's `Authorization` header) and [`test/reliability.test.cjs`](test/reliability.test.cjs).
+- **Read-only tool calling.** The model may call `get_paper_page({page_number})`. The app validates the integer, checks `1..N`, reads the page text from the current PDF and sends it back as a `tool` message. The model decides *whether* to call; the app decides *what is allowed*. Covered by [`test/tool.test.cjs`](test/tool.test.cjs) (normal call, out-of-range page, fragmented arguments, cancellation) and the tool case in [`test/desktop.spec.cjs`](test/desktop.spec.cjs).
+- **Failure recovery.** 429/5xx/network failures are retried only while no text has been streamed (3 attempts total by default, configurable via `retries`), honouring `Retry-After` with exponential backoff and jitter. 401/403 are never retried. A stream that already displayed text is never replayed: the partial answer stays in the chat with a "重新生成" button. Covered by [`test/reliability.test.cjs`](test/reliability.test.cjs) and the failure cases in [`test/desktop.spec.cjs`](test/desktop.spec.cjs).
+
 ## Dependencies and licenses
 
 - Electron (MIT), PDF.js (Apache-2.0), electron-builder (MIT), Playwright (Apache-2.0). Versions are pinned in `package-lock.json`; build tools are not shipped as application runtime code.

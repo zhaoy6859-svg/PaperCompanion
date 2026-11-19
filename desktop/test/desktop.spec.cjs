@@ -7,8 +7,16 @@ function fixturePDF(){
 }
 test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, persistence',async({ },testInfo)=>{
  const home=await fs.mkdtemp(path.join(os.tmpdir(),'pc-e2e-')),file=path.join(home,'research.pdf');await fs.writeFile(file,fixturePDF());
- const calls=[];let failNext=false;
- const server=http.createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;const request=JSON.parse(body);calls.push(request);if(failNext){failNext=false;res.writeHead(500);res.end();return;}const system=request.messages[0].content;let answer;
+ const calls=[];let failNext=false,authFail=false,authCalls=0,toolNext=false;
+ const server=http.createServer(async(req,res)=>{let body='';for await(const c of req)body+=c;const request=JSON.parse(body);calls.push(request);
+  if(authFail){authCalls++;res.writeHead(401);res.end('bad key');return;}
+  if(failNext){failNext=false;res.writeHead(500);res.end();return;}
+  if(toolNext&&!request.messages.some(m=>m.role==='tool')){
+    toolNext=false;res.writeHead(200,{'Content-Type':'text/event-stream'});
+    res.write('data: '+JSON.stringify({choices:[{delta:{tool_calls:[{index:0,id:'call_e2e',type:'function',function:{name:'get_paper_page',arguments:'{"page_number":1}'}}]}}]})+'\n\n');
+    res.end('data: '+JSON.stringify({choices:[{delta:{},finish_reason:'tool_calls'}]})+'\n\ndata: [DONE]\n\n');return;
+  }
+  const system=request.messages[0].content;let answer;
   if(system.includes('学习记忆'))answer='早期记忆：用户关注经验风险、参数含义和泛化误差。';
   else if(system.includes('OCR'))answer='经验风险 是训练集上的平均损失。';
   else if(system.includes('学习报告'))answer='# 学习报告\n\n## 核心概念\n经验风险是平均损失。\n\n$$\\widehat R_n=\\frac{1}{n}\\sum_{i=1}^n\\ell_i$$\n\n## 待追问\n如何评估泛化误差？';
@@ -36,6 +44,16 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   await page.screenshot({path:testInfo.outputPath('splitter.png')});
   await page.locator('#question').fill('请解释经验风险');await expect(page.locator('#question')).toHaveValue('请解释经验风险');await page.locator('#send').click();await expect(page.locator('#conversation .katex')).toBeVisible();await expect(page.locator('#send')).toBeEnabled();expect(await page.evaluate(()=>window.hacked)).toBeUndefined();
   expect(calls.at(-1).messages[0].content).toContain('完全陌生');
+
+  // The model may call the read-only page tool; the app executes it and sends the text back.
+  toolNext=true;
+  await page.locator('#question').fill('查第一页');
+  await page.locator('#send').click();
+  await expect(page.locator('#send')).toBeEnabled({timeout:20000});
+  const toolRequest=calls.find(call=>call.messages?.some?.(message=>message.role==='tool'));
+  expect(toolRequest).toBeTruthy();
+  expect(toolRequest.messages.find(message=>message.role==='tool').content).toContain('Empirical risk');
+  await expect(page.locator('#conversation')).toContainText('经验风险');
 
   // Highlight the selected sentence, then add a note from the notes tab.
   await page.evaluate(()=>{
@@ -85,10 +103,13 @@ test('Windows desktop: welcome, PDF, familiarity, chat, translation, report, per
   await page.locator('#export').click();await page.locator('#export-pdf').click();await expect(page.locator('#status')).toHaveText('已保存到本地 · PDF');expect((await fs.readFile(path.join(home,'export.pdf'))).subarray(0,5).toString()).toBe('%PDF-');await page.locator('#export-tex').click();await expect(page.locator('#status')).toHaveText('已保存到本地 · TEX');expect(await fs.readFile(path.join(home,'export.tex'),'utf8')).toContain('\\frac{1}{n}');if(process.platform==='win32')await fs.access(path.join(home,'paper-companion-cjk.otf'));await page.locator('#close-export').click();
   await page.locator('#switch').click();await expect(page.locator('#view-label')).toHaveText('原文');await page.locator('#switch').click();await expect(page.locator('#view-label')).toHaveText('LaTeX 译文');
   await page.locator('#report').click();await expect(page.locator('#export-dialog')).toBeVisible({timeout:240000});await expect(page.locator('#export-pdf')).toBeEnabled();await page.locator('#export-tex').click();await expect(page.locator('#status')).toHaveText('已保存到本地 · TEX');expect(await fs.readFile(path.join(home,'export.tex'),'utf8')).toContain('学习报告');await page.locator('#close-export').click();
-  failNext=true;await page.locator('#question').fill('重试测试');await page.locator('#send').click();await expect(page.locator('#status')).toContainText('HTTP 500');await expect(page.locator('#question')).toHaveValue('重试测试');
+  // A transient 500 is retried and the answer still lands.
+  failNext=true;const beforeRetry=calls.length;await page.locator('#question').fill('重试测试');await page.locator('#send').click();await expect(page.locator('#status')).toContainText('回答已保存',{timeout:20000});expect(calls.length).toBeGreaterThanOrEqual(beforeRetry+2);
+  // A 401 is not retried and the question is restored for the user.
+  authFail=true;await page.locator('#question').fill('鉴权测试');await page.locator('#send').click();await expect(page.locator('#status')).toContainText('API Key 无效',{timeout:20000});await expect(page.locator('#question')).toHaveValue('鉴权测试');expect(authCalls).toBe(1);authFail=false;
   expect(errors).toEqual([]);await app.close();app=null;
   // Seed a long saved history to exercise summary batching through the actual UI.
-  const dir=path.join(home,'papers'),files=await fs.readdir(dir),statePath=path.join(dir,files[0]);const state=JSON.parse(await fs.readFile(statePath,'utf8'));expect(state.level).toBe('beginner');expect(state.threads).toHaveLength(1);expect(state.highlights).toHaveLength(1);expect(state.highlights[0].note).toContain('训练集上的平均损失');state.threads=Array.from({length:35},(_,i)=>({question:'问题'+i,answer:'需要记住的解释。'.repeat(160),page:0}));await fs.writeFile(statePath,JSON.stringify(state));
+  const dir=path.join(home,'papers'),files=await fs.readdir(dir),statePath=path.join(dir,files[0]);const state=JSON.parse(await fs.readFile(statePath,'utf8'));expect(state.level).toBe('beginner');expect(state.threads).toHaveLength(3);expect(state.highlights).toHaveLength(1);expect(state.highlights[0].note).toContain('训练集上的平均损失');state.threads=Array.from({length:35},(_,i)=>({question:'问题'+i,answer:'需要记住的解释。'.repeat(160),page:0}));await fs.writeFile(statePath,JSON.stringify(state));
   app=await launch();page=await app.firstWindow();await page.locator('#resume').click();await expect(page.locator('#level-dialog')).not.toBeVisible();await expect(page.locator('#conversation .turn')).toHaveCount(35);await page.locator('#question').fill('继续解释');await page.locator('#send').click();await expect(page.locator('#send')).toBeEnabled({timeout:30000});
   expect(calls.some(c=>c.messages[0].content.includes('学习记忆'))).toBeTruthy();const latest=calls.at(-1);expect(latest.messages.length).toBeLessThanOrEqual(51);expect(latest.messages.some(m=>m.content.includes('此前交流摘要'))).toBeTruthy();
  }finally{if(app)await app.close();server.close();}
