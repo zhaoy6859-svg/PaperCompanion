@@ -154,7 +154,7 @@ final class SettingsWindowController: NSWindowController {
             baseURLField.stringValue = prefs.baseURL
             modelCombo.stringValue = prefs.model
         }
-        apiKeyField.stringValue = prefs.key(for: currentProviderID)
+        apiKeyField.stringValue = prefs.key(forBaseURL: baseURLField.stringValue)
         visionSwitch.state = prefs.visionEnabled ? .on : .off
         applyProviderTraits()
         statusLabel.stringValue = prefs.apiKey.isEmpty ? "还没填 Key，问答与翻译还不能用。" : ""
@@ -176,7 +176,7 @@ final class SettingsWindowController: NSWindowController {
                 if !provider.baseURL.isEmpty { baseURLField.stringValue = provider.baseURL }
                 if let first = provider.models.first { modelCombo.stringValue = first }
             }
-            apiKeyField.stringValue = prefs.key(for: id)
+            apiKeyField.stringValue = prefs.key(forBaseURL: baseURLField.stringValue)
         }
         applyProviderTraits()
     }
@@ -186,6 +186,8 @@ final class SettingsWindowController: NSWindowController {
         visionSwitch.isEnabled = provider.supportsVision
         if !provider.supportsVision { visionSwitch.state = .off }
         apiKeyField.isEnabled = true
+        let saved = !prefs.key(forBaseURL: baseURLField.stringValue).isEmpty
+        keyHintLabel.stringValue = "· " + provider.keyHint + (saved ? " · 当前地址已保存 Key" : " · 当前地址还没有 Key，不会复用其他地址")
     }
 
     @objc private func providerChanged() {
@@ -203,7 +205,7 @@ final class SettingsWindowController: NSWindowController {
             ? (provider.models.first ?? "deepseek-chat")
             : modelCombo.stringValue
         prefs.saveConfig(provider.id, baseURL: prefs.baseURL, model: prefs.model)
-        prefs.setKey(apiKeyField.stringValue, for: provider.id)
+        prefs.setKey(apiKeyField.stringValue, forBaseURL: prefs.baseURL)
         prefs.visionEnabled = provider.supportsVision && visionSwitch.state == .on
         statusLabel.stringValue = "已保存 ✓"
         statusLabel.textColor = .systemGreen

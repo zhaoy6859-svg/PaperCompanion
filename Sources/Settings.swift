@@ -147,15 +147,26 @@ final class Prefs {
     private var keyFileURL: URL { Store.root.appendingPathComponent("credentials.json") }
     private var providerKeys: [String: String] = [:]
 
+    static func originKey(_ baseURL: String) -> String {
+        guard let url = URL(string: baseURL), let host = url.host else { return baseURL }
+        let port = url.port.map { ":\($0)" } ?? ""
+        return "\(url.scheme ?? "https")://\(host)\(port)"
+    }
+
     private func readCredentials() -> [String: String] {
         guard let data = try? Data(contentsOf: keyFileURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         if let keys = obj["keys"] as? [String: String] {
-            return keys.filter { !$0.value.isEmpty }
+            var migrated: [String: String] = [:]
+            for (key, value) in keys where !value.isEmpty {
+                if key.contains("://") { migrated[key] = value }
+                else { migrated[Prefs.originKey(LLMProviders.provider(key).baseURL)] = value }
+            }
+            return migrated
         }
         // v1 files had a single DeepSeek key.
         if let legacy = obj["apiKey"] as? String, !legacy.isEmpty {
-            return ["deepseek": legacy]
+            return [Prefs.originKey("https://api.deepseek.com"): legacy]
         }
         return [:]
     }
@@ -170,6 +181,7 @@ final class Prefs {
 
     init() {
         providerKeys = readCredentials()
+        if !providerKeys.isEmpty { writeCredentials() }
     }
 
     // MARK: Providers
@@ -181,23 +193,24 @@ final class Prefs {
 
     var provider: LLMProvider { LLMProviders.provider(providerID) }
 
-    func key(for providerID: String) -> String {
-        providerKeys[providerID] ?? ""
+    func key(forBaseURL baseURL: String) -> String {
+        providerKeys[Prefs.originKey(baseURL)] ?? ""
     }
 
-    func setKey(_ key: String, for providerID: String) {
+    func setKey(_ key: String, forBaseURL baseURL: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { providerKeys.removeValue(forKey: providerID) }
-        else { providerKeys[providerID] = trimmed }
+        let origin = Prefs.originKey(baseURL)
+        if trimmed.isEmpty { providerKeys.removeValue(forKey: origin) }
+        else { providerKeys[origin] = trimmed }
         writeCredentials()
     }
 
     var apiKey: String {
         if let env = ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"], !env.isEmpty { return env }
-        return providerKeys[providerID] ?? ""
+        return key(forBaseURL: baseURL)
     }
 
-    func setAPIKey(_ key: String) { setKey(key, for: providerID) }
+    func setAPIKey(_ key: String) { setKey(key, forBaseURL: baseURL) }
 
     /// Base URL and model remembered per provider, so switching back keeps settings.
     func savedConfig(_ id: String) -> (baseURL: String, model: String)? {
@@ -229,16 +242,15 @@ final class Prefs {
         if ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"] != nil { completion?(); return }
         guard !warmUpStarted else { return }
         warmUpStarted = true
-        guard providerKeys["deepseek"] == nil else {
+        guard key(forBaseURL: "https://api.deepseek.com").isEmpty else {
             completion?()
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
             let stored = Keychain.get("deepseek-api-key") ?? ""
             DispatchQueue.main.async {
-                if self.providerKeys["deepseek"] == nil, !stored.isEmpty {
-                    self.providerKeys["deepseek"] = stored
-                    self.writeCredentials()
+                if self.key(forBaseURL: "https://api.deepseek.com").isEmpty, !stored.isEmpty {
+                    self.setKey(stored, forBaseURL: "https://api.deepseek.com")
                 }
                 completion?()
             }

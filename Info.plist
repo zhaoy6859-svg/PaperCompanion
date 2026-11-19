@@ -2,32 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleName</key>
-	<string>论文伴侣</string>
 	<key>CFBundleDisplayName</key>
 	<string>论文伴侣</string>
-	<key>CFBundleExecutable</key>
-	<string>PaperCompanion</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.papercompanion.app</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>2.3.0</string>
-	<key>CFBundleVersion</key>
-	<string>23</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.productivity</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
-	<key>LSUIElement</key>
-	<false/>
-	<key>CFBundleIconFile</key>
-	<string>icon</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Paper Companion</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -43,10 +19,34 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleExecutable</key>
+	<string>PaperCompanion</string>
+	<key>CFBundleIconFile</key>
+	<string>icon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.papercompanion.app</string>
+	<key>CFBundleName</key>
+	<string>论文伴侣</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.3.2</string>
+	<key>CFBundleVersion</key>
+	<string>25</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Paper Companion</string>
 </dict>
 </plist>

@@ -23,9 +23,9 @@
 
 ## ⬇️ macOS 下载安装
 
-**[下载 论文伴侣 2.3.1（macOS 13+）](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.3.1)** · DMG 5.9 MB
+**[下载 论文伴侣 2.3.2（macOS 13+）](https://github.com/zhaoy6859-svg/PaperCompanion/releases/tag/v2.3.2)** · DMG 5.9 MB
 
-1. 打开上面的 Release 页面，下载 `PaperCompanion-2.3.1.dmg`
+1. 打开上面的 Release 页面，下载 `PaperCompanion-2.3.2.dmg`
 2. 把「论文伴侣」拖进「应用程序」
 3. 首次打开若被 Gatekeeper 拦下：右键 →「打开」，或执行
    `xattr -dr com.apple.quarantine "/Applications/论文伴侣.app"`
@@ -33,6 +33,7 @@
 > 只阅读和问答不需要额外依赖；要让「译文 / 学习报告」排版跑通，需要本机安装 MacTeX 或 TeX Live（`xelatex`）。
 
 2.3.1：伴侣回答改为网页版结构（结论 → 原文引用 → 逐符号解释 → 类比/边界，数学强制 LaTeX）；阅读区与对话区可拖动调宽并记住宽度。
+2.3.2：API Key 按服务地址绑定，切换 Base URL 不会复用旧服务的 Key（[测试](https://github.com/zhaoy6859-svg/PaperCompanion/blob/main/tests/KeyIsolationTests.swift)）。
 
 觉得有用的话，点右上角 ⭐ **Star** 支持一下，也欢迎邮件交流：**zhaoy6859@gmail.com**
 
@@ -145,7 +146,7 @@ swiftc -parse-as-library -framework AppKit -framework WebKit tests/RichTranscrip
 - **只读工具 `get_paper_page`**：模型决定是否调用，App 校验页码（整数、1..N）、读取当前论文该页正文并回传，模型再据此回答。测试覆盖正常调用、越界、参数分片和取消：[tool.test.cjs](https://github.com/zhaoy6859-svg/PaperCompanion/blob/main/desktop/test/tool.test.cjs)。
 - **失败恢复**：429/5xx/网络错误在尚未输出正文时最多重试 3 次，遵守 `Retry-After` 并做指数退避；401/403 不重试；已经显示正文的断流不自动重放，保留现场并提供「重新生成」。测试见 [reliability.test.cjs](https://github.com/zhaoy6859-svg/PaperCompanion/blob/main/desktop/test/reliability.test.cjs) 与 [desktop.spec.cjs](https://github.com/zhaoy6859-svg/PaperCompanion/blob/main/desktop/test/desktop.spec.cjs)。
 
-以上行为在 Windows/Electron 桌面版实现并随 CI 跑；macOS 原生版的对应移植在计划中。
+以上行为在 Windows/Electron 桌面版实现并随 CI 跑。macOS 原生版已完成 Key 按地址绑定（[KeyIsolationTests.swift](https://github.com/zhaoy6859-svg/PaperCompanion/blob/main/tests/KeyIsolationTests.swift)）；工具调用与重试的移植在计划中。
 
 ## 交流
 
