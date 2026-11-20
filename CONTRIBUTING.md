@@ -30,9 +30,10 @@ open "build/论文伴侣.app"
 ## 测试
 
 ```sh
-swiftc Sources/Models.swift Sources/ConversationMemory.swift Sources/ChatEngine.swift tests/ConversationMemoryTests.swift -o /tmp/pc-memory-tests && /tmp/pc-memory-tests
-swiftc -framework AppKit -framework PDFKit Sources/Models.swift Sources/ConversationMemory.swift Sources/PaperLayout.swift Sources/TranslationTeX.swift Sources/LearningReport.swift tests/ReadingPDFTests.swift -o /tmp/pc-pdf-tests && /tmp/pc-pdf-tests
+./scripts/test.sh
 ```
+
+脚本会跑记忆与回答篇幅、书房、译文版式。本机有 XeLaTeX 时还会编译译文 PDF。macOS CI 在构建之后执行同一脚本。
 
 `tests/ReaderSwitchTests.swift` 需要图形会话；`tests/RichTranscriptTests.swift` 需要 WebKit。
 
@@ -41,7 +42,7 @@ swiftc -framework AppKit -framework PDFKit Sources/Models.swift Sources/Conversa
 ## 提交 PR
 
 1. 从 `main` 切分支，改动尽量聚焦
-2. 跑一遍 `./build.sh`，确认没有编译警告新增
+2. 跑一遍 `./build.sh` 和 `./scripts/test.sh`，确认没有编译警告新增
 3. 界面改动附截图；翻译/排版改动附上前后对比
 4. 不要提交 API Key、`credentials.json`、`dist/`、`build/`
 

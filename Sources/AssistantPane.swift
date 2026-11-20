@@ -45,6 +45,7 @@ final class AssistantPane: NSView, NSTextViewDelegate {
     private let anchorBar = NSView()
     private let anchorLabel = NSTextField(labelWithString: "")
     private let chipsStack = NSStackView()
+    private let detailControl = NSSegmentedControl(labels: ["精简", "详细"], trackingMode: .selectOne, target: nil, action: nil)
     private let composerBox = NSView()
     private let composer = ComposerTextView()
     private let composerScroll = NSScrollView()
@@ -229,6 +230,15 @@ final class AssistantPane: NSView, NSTextViewDelegate {
         chipsStack.orientation = .horizontal
         chipsStack.spacing = 6
         chipsStack.translatesAutoresizingMaskIntoConstraints = false
+        detailControl.segmentStyle = .rounded
+        detailControl.font = Theme.text(11, weight: .medium)
+        detailControl.selectedSegment = Prefs.shared.answerDetail == .detailed ? 1 : 0
+        detailControl.setToolTip("先给结论，大约 400 字", forSegment: 0)
+        detailControl.setToolTip("把推理、符号和证据边界写完整", forSegment: 1)
+        detailControl.target = self
+        detailControl.action = #selector(detailChanged)
+        detailControl.translatesAutoresizingMaskIntoConstraints = false
+        detailControl.setContentCompressionResistancePriority(.required, for: .horizontal)
         for (title, question) in Self.quickAsks {
             let pill = PillButton(title: title)
             pill.target = self
@@ -283,6 +293,7 @@ final class AssistantPane: NSView, NSTextViewDelegate {
 
         chatContainer.addSubview(anchorBar)
         chatContainer.addSubview(chipsStack)
+        chatContainer.addSubview(detailControl)
         chatContainer.addSubview(composerBox)
 
         NSLayoutConstraint.activate([
@@ -296,9 +307,13 @@ final class AssistantPane: NSView, NSTextViewDelegate {
             anchorBar.bottomAnchor.constraint(equalTo: chipsStack.topAnchor, constant: -8),
 
             chipsStack.leadingAnchor.constraint(equalTo: chatContainer.leadingAnchor, constant: 12),
-            chipsStack.trailingAnchor.constraint(lessThanOrEqualTo: chatContainer.trailingAnchor, constant: -12),
+            chipsStack.trailingAnchor.constraint(lessThanOrEqualTo: detailControl.leadingAnchor, constant: -8),
             chipsStack.bottomAnchor.constraint(equalTo: composerBox.topAnchor, constant: -8),
             chipsStack.heightAnchor.constraint(equalToConstant: 26),
+
+            detailControl.trailingAnchor.constraint(equalTo: chatContainer.trailingAnchor, constant: -12),
+            detailControl.centerYAnchor.constraint(equalTo: chipsStack.centerYAnchor),
+            detailControl.widthAnchor.constraint(equalToConstant: 108),
 
             composerBox.leadingAnchor.constraint(equalTo: chatContainer.leadingAnchor, constant: 12),
             composerBox.trailingAnchor.constraint(equalTo: chatContainer.trailingAnchor, constant: -12),
@@ -558,6 +573,10 @@ final class AssistantPane: NSView, NSTextViewDelegate {
     // MARK: - Actions
 
     @objc private func tabTapped(_ sender: NSButton) { selectTab(sender.tag) }
+
+    @objc private func detailChanged() {
+        Prefs.shared.answerDetail = detailControl.selectedSegment == 1 ? .detailed : .concise
+    }
 
     @objc private func sendTapped() {
         if isStreaming { delegate?.assistantDidStop() } else { submit() }

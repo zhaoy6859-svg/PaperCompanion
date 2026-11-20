@@ -11,6 +11,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     private let subtitleLabel = NSTextField(labelWithString: "打开一篇 PDF 论文开始")
     private let openButton = NSButton()
     private let recentsButton = NSButton()
+    private let navigatorButton = NSButton()
+    private var navigatorOn = false
     private let compareButton = NSButton()
     private let regionButton = NSButton()
     private let sidebarButton = NSButton()
@@ -44,6 +46,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
 
     var onOpenSettings: (() -> Void)?
     private var startupDocument: URL? = nil
+    private var launchSplash: LaunchSplashView?
+    private var readingChrome: [NSView] = []
 
     // MARK: - Init
 
@@ -75,6 +79,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         } else {
             reader.show(document: nil, empty: true)
             showSidebar(false, animated: false)
+            setReadingChrome(visible: false)
+            updateHeaderAvailability()
         }
     }
 
@@ -83,7 +89,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     private func buildUI() {
         guard let window else { return }
         let root = DropRootView()
-        root.onDropFile = { [weak self] url in self?.open(url: url) }
+        root.onDropFile = { [weak self] url in self?.openOrImport(url) }
         root.wantsLayer = true
         root.layer?.backgroundColor = Theme.paperBackground.cgColor
         window.contentView = root
@@ -142,9 +148,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         header.translatesAutoresizingMaskIntoConstraints = false
 
         openButton.iconSetup("folder.badge.plus", tip: "打开论文 (⌘O)", target: self, action: #selector(pickFile), tint: .secondaryLabelColor, size: 28)
-        recentsButton.iconSetup("clock.arrow.circlepath", tip: "最近打开", target: self, action: #selector(showRecents(_:)), tint: .secondaryLabelColor, size: 28)
+        recentsButton.iconSetup("books.vertical", tip: "书房 (⇧⌘L)", target: self, action: #selector(showLibrary), tint: .secondaryLabelColor, size: 28)
+        navigatorButton.iconSetup("sidebar.left", tip: "显示或收起目录 (⇧⌘D)", target: self, action: #selector(toggleNavigator), tint: .secondaryLabelColor, size: 28)
 
-        titleLabel.font = Theme.text(14.5, weight: .semibold)
+        titleLabel.font = Theme.display(16, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingMiddle
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -159,7 +166,16 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         sidebarButton.iconSetup("bubble.left.and.bubble.right", tip: "收起/展开助手 (⇧⌘S)", target: self, action: #selector(toggleSidebar), size: 28)
         settingsButton.iconSetup("slider.horizontal.3", tip: "设置 (⌘,)", target: self, action: #selector(openSettings), size: 28)
 
-        for view in [openButton, recentsButton, titleLabel, subtitleLabel, compareButton, regionButton, sidebarButton, settingsButton] {
+        let brandMark = NSImageView()
+        brandMark.image = CompanionArt.avatar
+        brandMark.imageScaling = .scaleProportionallyUpOrDown
+        brandMark.wantsLayer = true
+        brandMark.layer?.cornerRadius = 9
+        brandMark.layer?.masksToBounds = true
+        brandMark.setAccessibilityLabel("论文伴侣")
+        brandMark.translatesAutoresizingMaskIntoConstraints = false
+
+        for view in [openButton, recentsButton, navigatorButton, brandMark, titleLabel, subtitleLabel, compareButton, regionButton, sidebarButton, settingsButton] {
             header.addSubview(view)
         }
 
@@ -170,7 +186,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
             recentsButton.leadingAnchor.constraint(equalTo: openButton.trailingAnchor, constant: 4),
             recentsButton.centerYAnchor.constraint(equalTo: openButton.centerYAnchor),
 
-            titleLabel.leadingAnchor.constraint(equalTo: recentsButton.trailingAnchor, constant: 12),
+            navigatorButton.leadingAnchor.constraint(equalTo: recentsButton.trailingAnchor, constant: 4),
+            navigatorButton.centerYAnchor.constraint(equalTo: openButton.centerYAnchor),
+
+            brandMark.leadingAnchor.constraint(equalTo: navigatorButton.trailingAnchor, constant: 12),
+            brandMark.centerYAnchor.constraint(equalTo: openButton.centerYAnchor),
+            brandMark.widthAnchor.constraint(equalToConstant: 32),
+            brandMark.heightAnchor.constraint(equalToConstant: 32),
+
+            titleLabel.leadingAnchor.constraint(equalTo: brandMark.trailingAnchor, constant: 10),
             titleLabel.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: compareButton.leadingAnchor, constant: -18),
 
@@ -248,6 +272,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let fitButton = NSButton(title: "适宽", target: self, action: #selector(fitWidth))
+        readingChrome = [prevButton, nextButton, pageLabel, zoomOutButton, zoomInButton, zoomLabel, fitButton]
         fitButton.bezelStyle = .inline
         fitButton.isBordered = false
         fitButton.font = Theme.text(10.5)
@@ -296,6 +321,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         ])
     }
 
+    private func setReadingChrome(visible: Bool) {
+        for view in readingChrome { view.isHidden = !visible }
+    }
+
     private func wireReader() {
         reader.onSelectionAction = { [weak self] action, text, page in
             self?.handleSelection(action: action, text: text, page: page)
@@ -311,9 +340,25 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         reader.onHighlightTapped = { [weak self] id in
             self?.handleHighlightTap(id)
         }
-        reader.onDropFile = { [weak self] url in self?.open(url: url) }
+        reader.onDropFile = { [weak self] url in self?.openOrImport(url) }
         reader.onRequestOpen = { [weak self] in self?.pickFile() }
         reader.onRecentPicked = { [weak self] url in self?.open(url: url) }
+        reader.onImportFolder = { [weak self] in self?.importFolderPanel() }
+        reader.onImportZotero = { [weak self] in self?.importZotero() }
+        reader.onRelocatePaper = { [weak self] url in self?.relocatePaper(url) }
+        reader.onNavigatorChanged = { [weak self] on in
+            self?.navigatorOn = on
+            self?.refreshNavigatorButton()
+        }
+        reader.onLibraryStatus = { [weak self] text, emptyLibrary in
+            guard let self else { return }
+            self.statusLabel.stringValue = text
+            if self.state == nil {
+                self.titleLabel.stringValue = "论文伴侣"
+                self.subtitleLabel.stringValue = emptyLibrary ? "打开一篇 PDF 论文开始" : "书房"
+                self.window?.title = "论文伴侣"
+            }
+        }
         reader.onTranslationLanguageChanged = { [weak self] language in
             Prefs.shared.translationLanguage = language
             self?.settingsDidChange()
@@ -342,6 +387,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     }
 
     func open(url: URL) {
+        launchSplash?.finish(immediate: true)
         guard !isLoading else { return }
         isLoading = true
         statusLabel.stringValue = "正在解析…"
@@ -376,6 +422,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         engine.cancel()
         pdfDocument = PDFDocument(url: doc.url)
         reader.show(document: pdfDocument, empty: false)
+        setReadingChrome(visible: true)
 
         var newState = cached ?? DocState(doc: doc)
         newState.doc = doc
@@ -389,6 +436,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         if doc.truncated { subtitle += " · 正文有截断" }
         subtitleLabel.stringValue = subtitle
         Prefs.shared.lastDocPath = doc.path
+        ShelfStore.remember(newState)
 
         assistant.setDocument(doc)
         assistant.setThreads(newState.threads)
@@ -399,7 +447,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
 
         showSidebar(true, animated: false)
 
-        if let page = pdfDocument?.page(at: min(Prefs.shared.lastPage, max(0, doc.pageCount - 1))) {
+        var pageIndex = ShelfStore.lastPage(for: doc.path)
+        if pageIndex == 0, Prefs.shared.lastDocPath == doc.path, Prefs.shared.lastPage > 0 {
+            pageIndex = Prefs.shared.lastPage
+        }
+        if let page = pdfDocument?.page(at: min(pageIndex, max(0, doc.pageCount - 1))) {
             reader.pdfView.go(to: page)
         }
         currentPage = reader.currentPageIndex()
@@ -464,9 +516,18 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         let hasDoc = state != nil
         compareButton.isEnabled = hasDoc && (state?.doc.needsOCR == false)
         regionButton.isEnabled = hasDoc
+        navigatorButton.isEnabled = hasDoc
         compareButton.alphaValue = compareButton.isEnabled ? 1 : 0.45
         regionButton.alphaValue = regionButton.isEnabled ? 1 : 0.45
+        navigatorButton.alphaValue = hasDoc ? 1 : 0.45
+        refreshNavigatorButton()
     }
+
+    private func refreshNavigatorButton() {
+        navigatorButton.contentTintColor = (navigatorOn && state != nil) ? Theme.accent : .secondaryLabelColor
+    }
+
+    @objc private func toggleNavigator() { reader.toggleNavigator() }
 
     private func updateCompareButton(_ on: Bool) {
         compareButton.layer?.backgroundColor = on
@@ -488,27 +549,94 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         }
     }
 
-    @objc private func showRecents(_ sender: NSButton) {
-        let menu = NSMenu()
-        let entries = Recents.scan(limit: 8)
-        if entries.isEmpty {
-            menu.addItem(withTitle: "（没有找到最近的 PDF）", action: nil, keyEquivalent: "")
+    func currentPaperPath() -> String? { state?.doc.path }
+
+    @objc func showLibrary() {
+        if let current = state {
+            Store.save(current)
         }
-        for entry in entries {
-            let item = NSMenuItem(title: entry.url.lastPathComponent, action: #selector(openRecent(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = entry.url
-            item.toolTip = entry.url.path
-            menu.addItem(item)
-        }
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "在 Finder 里选…", action: #selector(pickFile), keyEquivalent: "").target = self
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 6), in: sender)
+        translator.cancel()
+        engine.cancel()
+        reportEngine.cancel()
+        reportRunning = false
+        state = nil
+        pdfDocument = nil
+        reader.show(document: nil, empty: true)
+        setReadingChrome(visible: false)
+        showSidebar(false, animated: false)
+        updateHeaderAvailability()
+        updateCompareButton(false)
+        compareButton.isHidden = false
     }
 
-    @objc private func openRecent(_ sender: NSMenuItem) {
-        guard let url = sender.representedObject as? URL else { return }
-        open(url: url)
+    func openOrImport(_ url: URL) {
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+            importFolder(url)
+        } else {
+            open(url: url)
+        }
+    }
+
+    @objc func importFolderPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "导入"
+        panel.message = "选择存放论文 PDF 的文件夹，文件仍留在原处"
+        if panel.runModal() == .OK, let url = panel.url { importFolder(url) }
+    }
+
+    @objc func importZotero() {
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Zotero/storage")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            statusLabel.stringValue = "没有找到 ~/Zotero/storage"
+            return
+        }
+        importFolder(url)
+    }
+
+    func importFolder(_ url: URL) {
+        let result = ShelfStore.importFolder(url)
+        reader.reloadLibrary()
+        if result.added == 0 && result.skipped == 0 {
+            statusLabel.stringValue = "这个文件夹里没有 PDF"
+        } else if result.added == 0 {
+            statusLabel.stringValue = "没有新论文 · \(result.skipped) 篇已经在书房"
+        } else {
+            statusLabel.stringValue = "已放入书房 · 新增 \(result.added) 篇" + (result.skipped > 0 ? " · \(result.skipped) 篇已在" : "")
+        }
+    }
+
+    func relocatePaper(_ url: URL) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.canChooseDirectories = false
+        panel.message = "找到这篇论文现在的位置。笔记会跟着走。"
+        panel.prompt = "定位"
+        guard panel.runModal() == .OK, let picked = panel.url else { return }
+        ShelfStore.relocate(from: url, to: picked)
+        reader.reloadLibrary()
+        statusLabel.stringValue = "已改到新的位置"
+    }
+
+    func promptNewShelf(assignCurrent: Bool) {
+        guard let name = promptShelfText(title: "新建书架", confirm: "创建") else { return }
+        guard let collection = ShelfStore.createCollection(named: name) else {
+            statusLabel.stringValue = "已经有同名书架"
+            return
+        }
+        if assignCurrent, let path = state?.doc.path {
+            ShelfStore.toggle(path: path, collection: collection.id)
+            statusLabel.stringValue = "已放入「\(collection.name)」"
+        }
+        reader.reloadLibrary()
+    }
+
+    func toggleShelf(path: String, collection: UUID) {
+        ShelfStore.toggle(path: path, collection: collection)
+        reader.reloadLibrary()
     }
 
     @objc private func toggleRegion() {
@@ -540,6 +668,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         compareButton.title = reader.isShowingTranslation ? "返回原文" : "翻译 / 译文"
         pageLabel.stringValue = (reader.isShowingTranslation ? "译文 · 原文 " : "原文 ") + "\(currentPage + 1) / \(doc.pageCount)"
         Prefs.shared.lastPage = currentPage
+        ShelfStore.notePage(path: doc.path, page: currentPage)
     }
 
     private func updateZoomLabel() {
@@ -629,6 +758,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         statusLabel.stringValue = ConversationContext.recentStart(history) > (state.conversationMemory?.coveredCount ?? 0) ? "正在整理早期交流，随后回答…" : "回答中…"
 
         engine.ask(doc: state.doc, history: history, level: state.readingLevel ?? .beginner,
+                   detail: Prefs.shared.answerDetail,
                    memory: state.conversationMemory, onMemory: { [weak self] memory in
             guard let self, var current = self.state, current.doc.path == state.doc.path else { return }
             current.conversationMemory = memory
@@ -932,6 +1062,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
 
     }
 
+    func findInDocument() { reader.beginFind() }
+    func findNextInDocument() { reader.findNext() }
+    func findPreviousInDocument() { reader.findPrevious() }
+    func toggleNavigatorFromMenu() { reader.toggleNavigator() }
+    func debugFind(_ query: String) { reader.beginFind(query) }
+    func debugShowThumbnails() { reader.showThumbnailNavigator() }
+
     func toggleRegionFromMenu() { toggleRegion() }
     func showTranslationFromMenu() { toggleCompare() }
     func toggleSidebarFromMenu() { toggleSidebar() }
@@ -944,6 +1081,24 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         let levels = ReadingLevel.allCases
         guard index >= 0, index < levels.count else { return }
         picker.select(levels[index])
+    }
+
+    /// Full-window title card. Skipped for snapshots, file opens, and `PAPER_COMPANION_NO_SPLASH=1`.
+    func presentLaunchSplash() {
+        guard LaunchSplashView.shouldPlay, launchSplash == nil, let root = window?.contentView else { return }
+        let splash = LaunchSplashView(frame: root.bounds)
+        splash.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(splash)
+        NSLayoutConstraint.activate([
+            splash.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            splash.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            splash.topAnchor.constraint(equalTo: root.topAnchor),
+            splash.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+        ])
+        launchSplash = splash
+        splash.onFinished = { [weak self] in self?.launchSplash = nil }
+        root.layoutSubtreeIfNeeded()
+        splash.play()
     }
 
     func snapshotChat(to path: String, completion: @escaping () -> Void) { assistant.snapshotChat(to: URL(fileURLWithPath: path), completion: completion) }
@@ -987,7 +1142,11 @@ final class DropRootView: NSView {
 
     private func url(from sender: NSDraggingInfo) -> URL? {
         let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
-        return urls?.first { ["pdf"].contains($0.pathExtension.lowercased()) }
+        return urls?.first { url in
+            if url.pathExtension.lowercased() == "pdf" { return true }
+            var isDir: ObjCBool = false
+            return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
+        }
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

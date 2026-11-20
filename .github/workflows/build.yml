@@ -20,6 +20,11 @@ jobs:
       - name: Build app
         run: ./build.sh
 
+      - name: Unit tests
+        env:
+          DEEPSEEK_API_KEY: ""
+        run: ./scripts/test.sh
+
       - name: Check bundle
         run: |
           test -x "build/论文伴侣.app/Contents/MacOS/PaperCompanion"

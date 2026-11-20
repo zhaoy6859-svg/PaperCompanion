@@ -1,5 +1,19 @@
 import Foundation
 
+enum AnswerDetail: String {
+    case concise
+    case detailed
+
+    var instruction: String {
+        switch self {
+        case .concise:
+            return "【回答篇幅】精简。先给结论，再给 2–5 句依据。默认不超过 400 字。只有用户在问题里明确要求展开时才写更长。"
+        case .detailed:
+            return "【回答篇幅】详细。先给结论，再把推理讲完整：论文如何定义问题、关键步骤、符号在本文里的含义、证据能支持什么和不能支持什么。用短段落或小标题组织。不要为了简短停在几句结论上。问题本身很窄时可以较短；需要解释机制时写到说清楚为止。"
+        }
+    }
+}
+
 struct AskContext {
     var kind: AnchorKind = .general
     var page: Int?
@@ -27,6 +41,7 @@ final class ChatEngine {
     func ask(doc: PaperDoc,
              history: [AskThread],
              level: ReadingLevel = .beginner,
+             detail: AnswerDetail = .concise,
              memory: ConversationMemory? = nil,
              onMemory: @escaping (ConversationMemory) -> Void = { _ in },
              question: String,
@@ -49,16 +64,16 @@ final class ChatEngine {
             case .failure(let error): self.isStreaming = false; onFinish(.failure(error))
             case .success(let memory):
                 self.sendAnswer(doc: doc, history: history, start: min(start, memory?.coveredCount ?? 0), level: level,
-                                memory: memory, question: question, context: context, onDelta: onDelta, onFinish: onFinish)
+                                detail: detail, memory: memory, question: question, context: context, onDelta: onDelta, onFinish: onFinish)
             }
         }
     }
 
     private func sendAnswer(doc: PaperDoc, history: [AskThread], start: Int, level: ReadingLevel,
-                            memory: ConversationMemory?, question: String, context: AskContext,
+                            detail: AnswerDetail, memory: ConversationMemory?, question: String, context: AskContext,
                             onDelta: @escaping (String) -> Void,
                             onFinish: @escaping (Result<String, Error>) -> Void) {
-        var messages: [[String: Any]] = [["role": "system", "content": ChatEngine.systemPrompt(doc: doc) + "\n【解释深度】\n" + level.instruction]]
+        var messages: [[String: Any]] = [["role": "system", "content": ChatEngine.systemPrompt(doc: doc, detail: detail) + "\n【解释深度】\n" + level.instruction]]
 
         if let memory {
             messages.append(["role": "system", "content": "【此前阅读交流摘要，仅作对话背景，不代表论文事实】\n" + memory.summary])
@@ -184,19 +199,19 @@ final class ChatEngine {
 
     // MARK: - Prompt construction
 
-    static func systemPrompt(doc: PaperDoc) -> String {
+    static func systemPrompt(doc: PaperDoc, detail: AnswerDetail = .concise) -> String {
         var prompt = """
         你是「论文伴侣」，一位严谨、直接的科研阅读助手，正陪用户精读一篇论文。
 
         行为准则：
         1. 只依据下面这篇论文回答。原文没写的数字、结论、引用，明确说"论文里没有"，绝不编造。
-        2. 默认用简体中文回答；如果用户要求翻译或指定语言，必须使用用户指定的目标语言。先给结论，再给 2–5 句依据；不复述问题，不写空话。
+        2. 默认用简体中文回答；如果用户要求翻译或指定语言，必须使用用户指定的目标语言。先给结论，再给依据；不复述问题，不写空话。
         3. 指位置时用 [p.x]（页码）或章节名。原文已带 [p.x] 标记。
         4. 解释公式：说清每个符号在本文语境里指什么、为什么这样设。
         5. 解释图表：先说它展示了什么变量/对比，再给关键数值，最后说它能支持与不能支持的结论。
         6. 区分"论文声称的"和"证据支持的"；可疑处直说。
-        7. 默认不超过 400 字，除非用户要求展开。
-        8. 用户若附了图片（框选的图/表/公式区域），以图片为主要依据，OCR 文本可能有误。
+        7. 用户若附了图片（框选的图/表/公式区域），以图片为主要依据，OCR 文本可能有误。
+        \(detail.instruction)
         """
 
         prompt += "\n\n【论文】\n标题：\(doc.title)\n页数：\(doc.pageCount)\n语言：\(doc.language.label)\n"

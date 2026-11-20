@@ -117,13 +117,14 @@
 
 菜单「论文伴侣 → 设置…」配置模型接口和 API Key，支持 OpenAI 兼容服务。Key 保存在本机 `~/Library/Application Support/PaperCompanion/credentials.json`（权限 0600）；旧钥匙串配置会迁移。论文、交流、笔记及译文缓存也保存在本机，不改动原 PDF。
 
-常用快捷键：`⌘O` 打开、`⇧⌘R` 框选、`⇧⌘T` 原文/译文、`⇧⌘S` 收起助手、`⌘,` 设置。
+常用快捷键：`⌘O` 打开、`⌘F` 查找正文、`⇧⌘D` 显示或收起目录、`⇧⌘R` 框选、`⇧⌘T` 原文/译文、`⇧⌘S` 收起助手、`⌘,` 设置。目录栏右上角也能收起。对话输入框旁可以选择「精简」或「详细」回答。
 
 扫描版的问答依赖 OCR/视觉能力；超长论文超过全文预算时会提示截断。翻译可停止、继续或重试，缓存按目标语言、提示词和排版版本区分。
 
 ## 回归验证
 
 ```sh
+./scripts/test.sh
 swiftc Sources/Models.swift Sources/ConversationMemory.swift Sources/ChatEngine.swift tests/ConversationMemoryTests.swift -o /tmp/pc-memory-tests
 /tmp/pc-memory-tests
 swiftc -framework AppKit -framework PDFKit Sources/Models.swift Sources/ConversationMemory.swift Sources/PaperLayout.swift Sources/TranslationTeX.swift Sources/LearningReport.swift tests/ReadingPDFTests.swift -o /tmp/pc-pdf-tests

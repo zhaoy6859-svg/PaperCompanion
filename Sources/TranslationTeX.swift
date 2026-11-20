@@ -22,11 +22,8 @@ enum TranslationTeX {
         \usepackage{fancyhdr}
         \usepackage{hyperref}
         \usepackage{enumitem}
-        \usepackage{graphicx}
         \usepackage{booktabs}
         \usepackage{array}
-        \usepackage{longtable}
-        \usepackage{multicol}
         \definecolor{ink}{HTML}{565F9C}
         \hypersetup{colorlinks=true,linkcolor=ink,urlcolor=ink}
         \pagestyle{fancy}\fancyhf{}
@@ -51,25 +48,24 @@ enum TranslationTeX {
 
         let dimensions = String(format: "paperwidth=%.2fbp,paperheight=%.2fbp,left=%.2fbp,right=%.2fbp,top=%.2fbp,bottom=%.2fbp,headheight=16pt", Double(layout.width), Double(layout.height), Double(layout.left), Double(layout.right), Double(layout.top), Double(layout.bottom))
         source = source.replacingOccurrences(of: "margin=22mm,headheight=16pt", with: dimensions)
-        source = source.replacingOccurrences(of: "[11pt,a4paper]", with: layout.fontSize <= 10 ? "[10pt]" : (layout.fontSize >= 12 ? "[12pt]" : "[11pt]"))
+        let point = layout.fontSize <= 10 ? "10pt" : (layout.fontSize >= 12 ? "12pt" : "11pt")
+        // Class option, not multicols: starred floats can then span both columns.
+        let options = layout.columns == 2 ? point + ",twocolumn" : point
+        source = source.replacingOccurrences(of: "[11pt,a4paper]", with: "[\(options)]")
         if layout.serif { source = source.replacingOccurrences(of: "PingFang SC", with: "Songti SC") }
         if layout.columns == 2 {
-            source += "\n\\setlength{\\columnsep}{18pt}\n\\begin{multicols}{2}\n"
+            source = source.replacingOccurrences(of: "\\begin{document}", with: "\\setlength{\\columnsep}{18pt}\n\\begin{document}")
         }
+        let spanningFloats = layout.columns == 2
         for key in pages.keys.sorted() {
             // Invisible PDF bookmarks retain provenance without inserting page headings.
             source += "\\pdfbookmark[1]{pc-source-\(key)}{pc-source-\(key)}\n"
             let content = pages[key] ?? ""
-            var rendered = body(content)
-            if layout.columns == 2 {
-                rendered = rendered.replacingOccurrences(of: "{longtable}", with: "{tabular}")
-                    .replacingOccurrences(of: "\\endhead", with: "")
-            }
+            let rendered = body(content, spanningFloats: spanningFloats)
             if content.unicodeScalars.contains(where: { (0x0600...0x06FF).contains($0.value) }) {
                 source += "\\begin{RTL}\n" + rendered + "\\end{RTL}\n"
             } else { source += rendered }
         }
-        if layout.columns == 2 { source += "\\end{multicols}\n" }
         source += "\\end{document}\n"
         return source
     }
@@ -97,7 +93,8 @@ enum TranslationTeX {
     }
 
     /// Markdown + math to LaTeX body.
-    static func body(_ markdown: String) -> String {
+    /// `spanningFloats` places wide tables and figure notes across both columns.
+    static func body(_ markdown: String, spanningFloats: Bool = false) -> String {
         var output = ""
         var paragraph: [String] = []
         var displayMath: [String] = []
@@ -129,7 +126,7 @@ enum TranslationTeX {
 
         func flushTable() {
             guard !tableBuffer.isEmpty else { return }
-            if let rendered = table(tableBuffer) {
+            if let rendered = table(tableBuffer, spanning: spanningFloats) {
                 closeParagraph()
                 closeList()
                 closeQuote()
@@ -200,6 +197,12 @@ enum TranslationTeX {
                 continue
             }
 
+            if let caption = figureCaption(line) {
+                flush()
+                output += figureNote(caption, spanning: spanningFloats)
+                continue
+            }
+
             if line.hasPrefix("#") {
                 flush()
                 let heading = line.drop(while: { $0 == "#" || $0 == " " })
@@ -259,10 +262,35 @@ enum TranslationTeX {
         return String(line[range.upperBound...])
     }
 
+    // MARK: - Figures
+
+    /// A whole line `![图注](figure)` is a caption, not a placed image.
+    static func figureCaption(_ line: String) -> String? {
+        guard line.hasPrefix("![") else { return nil }
+        guard let bracket = line.range(of: "]("), line.hasSuffix(")") else { return nil }
+        let target = String(line[bracket.upperBound...].dropLast()).trimmingCharacters(in: .whitespaces).lowercased()
+        guard target.isEmpty || target == "figure" || target == "fig" || target == "image" else { return nil }
+        return String(line[line.index(line.startIndex, offsetBy: 2)..<bracket.lowerBound])
+    }
+
+    private static func figureNote(_ caption: String, spanning: Bool) -> String {
+        let env = spanning ? "figure*" : "figure"
+        let label = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rendered = label.isEmpty ? "图注缺失" : inline(label)
+        return """
+        \\begin{\(env)}[ht]
+        \\centering
+        \\fbox{\\parbox{0.92\\linewidth}{\\centering\\small 原文插图保留在源 PDF。译文只保留图注，不按坐标重排。\\par\\vspace{3pt}\(rendered)}}
+        \\end{\(env)}
+
+        """
+    }
+
     // MARK: - Tables
 
-    /// Parses a Markdown table block into a longtable. Returns nil when it is not a table.
-    static func table(_ lines: [String]) -> String? {
+    /// Parses a Markdown table. Wide tables span the page when the document is two-column.
+    /// Cells wrap. The grid is never scaled down with \\resizebox.
+    static func table(_ lines: [String], spanning: Bool = false) -> String? {
         let rows = lines.filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("|") }
         guard rows.count >= 2 else { return nil }
         let cells = rows.map { row -> [String] in
@@ -284,22 +312,20 @@ enum TranslationTeX {
             return padded.prefix(columns).map { inline($0) }.joined(separator: " & ") + " \\\\"
         }
 
-        // Wide tables cannot wrap inside a two-column layout: typeset them at their
-        // natural width, then scale the whole grid to the column.
-        if columns >= 5 {
-            var grid = "\\begin{tabular}{@{}" + String(repeating: "l", count: columns) + "@{}}\n"
-            grid += "\\toprule\n" + rowTeX(header) + "\n\\midrule\n"
-            for row in bodyRows { grid += rowTeX(row) + "\n" }
-            grid += "\\bottomrule\n\\end{tabular}\n"
-            return "\\begin{center}\n\\resizebox{\\linewidth}{!}{%\n" + grid + "}\n\\end{center}\n"
+        let longest = ([header] + bodyRows).flatMap { $0 }.map(\.count).max() ?? 0
+        let wide = columns >= 4 || longest > 42
+        let useSpan = spanning && wide
+        let measure = useSpan ? "\\textwidth" : "\\linewidth"
+        let width = "\\dimexpr(\(measure)-" + String(columns * 2) + "\\tabcolsep)/" + String(max(1, columns)) + "\\relax"
+        let spec = String(repeating: ">{\\raggedright\\arraybackslash}p{\(width)}", count: columns)
+        var grid = "\\begin{tabular}{" + spec + "}\n"
+        grid += "\\toprule\n" + rowTeX(header) + "\n\\midrule\n"
+        for row in bodyRows { grid += rowTeX(row) + "\n" }
+        grid += "\\bottomrule\n\\end{tabular}\n"
+        if useSpan {
+            return "\\begin{table*}[ht]\\centering\\small\\setlength{\\tabcolsep}{4pt}\n" + grid + "\\end{table*}\n"
         }
-
-        let width = "\\dimexpr(\\linewidth-" + String(columns * 2) + "\\tabcolsep)/" + String(max(1, columns)) + "\\relax"
-        var out = "\\begin{center}\\small\n\\begin{tabular}{" + String(repeating: ">{\\raggedright\\arraybackslash}p{\(width)}", count: columns) + "}\n"
-        out += "\\toprule\n" + rowTeX(header) + "\n\\midrule\n"
-        for row in bodyRows { out += rowTeX(row) + "\n" }
-        out += "\\bottomrule\n\\end{tabular}\n\\end{center}\n"
-        return out
+        return "\\begin{center}\\small\\setlength{\\tabcolsep}{4pt}\n" + grid + "\\end{center}\n"
     }
 
     // MARK: - Math

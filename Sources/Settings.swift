@@ -63,6 +63,8 @@ final class Prefs {
         static let translationFraction = "translationFraction"
         static let translationFontSize = "translationFontSize"
         static let sidebarVisible = "sidebarVisible"
+        static let navigatorVisible = "navigatorVisible"
+        static let answerDetail = "answerDetail"
     }
 
     var model: String {
@@ -127,6 +129,16 @@ final class Prefs {
     var sidebarVisible: Bool {
         get { defaults.object(forKey: Key.sidebarVisible) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.sidebarVisible) }
+    }
+
+    var navigatorVisible: Bool {
+        get { defaults.object(forKey: Key.navigatorVisible) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.navigatorVisible) }
+    }
+
+    var answerDetail: AnswerDetail {
+        get { AnswerDetail(rawValue: defaults.string(forKey: Key.answerDetail) ?? "") ?? .concise }
+        set { defaults.set(newValue.rawValue, forKey: Key.answerDetail) }
     }
 
     var lastDocPath: String? {

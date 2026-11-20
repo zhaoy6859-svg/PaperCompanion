@@ -463,3 +463,21 @@ $('splitter').addEventListener('dblclick',()=>{
 
 
 settings=await api.settings();$('resume').hidden=!settings.lastFile;window.__pcReady=true;
+
+const splash=$('splash');
+if(splash){
+  let gone=false;
+  const leave=()=>{
+    if(gone)return;gone=true;
+    splash.classList.add('leave');
+    setTimeout(()=>splash.remove(),560);
+  };
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  setTimeout(leave,reduce?700:2350);
+  splash.addEventListener('pointerdown',leave);
+  const onKey=event=>{
+    if(gone){window.removeEventListener('keydown',onKey);return;}
+    if(event.key==='Escape'||event.key==='Enter'||event.key===' '){event.preventDefault();leave();}
+  };
+  window.addEventListener('keydown',onKey);
+}

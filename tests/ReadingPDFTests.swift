@@ -34,14 +34,50 @@ import PDFKit
         assert(abs(output.page(at: 0)!.bounds(for: .cropBox).width - PaperLayout.inspect(doc.url).width) < 0.1)
         assert(output.pageCount == 1, "Translation should flow continuously")
         assert(output.outlineRoot?.numberOfChildren == 2, "Invisible source anchors must survive compilation")
+        let outline = ReadingOutline.build(output)
+        assert(outline.note == "译文对应的原文页")
+        assert(outline.items.map(\.title) == ["原文第 1 页", "原文第 2 页"])
+        assert(!source.contains("twocolumn"))
+        assert(!source.contains("resizebox"))
+        let page = CGRect(x: 0, y: 0, width: 600, height: 800)
+        let wideLines = (0..<20).map { CGRect(x: 40, y: CGFloat($0) * 14, width: 520, height: 10) }
+        assert(!PaperLayout.looksTwoColumn(lineBounds: wideLines, page: page))
+        var columnLines: [CGRect] = []
+        for index in 0..<18 {
+            columnLines.append(CGRect(x: 36, y: CGFloat(index) * 14, width: 240, height: 10))
+            columnLines.append(CGRect(x: 320, y: CGFloat(index) * 14, width: 240, height: 10))
+        }
+        assert(PaperLayout.looksTwoColumn(lineBounds: columnLines, page: page))
+        let wideTable = TranslationTeX.table(["| a | b | c | d | e |", "| --- | --- | --- | --- | --- |", "| 很长的单元格内容需要换行而不是缩小到看不清 | 2 | 3 | 4 | 5 |"], spanning: true)
+        assert(wideTable?.contains("table*") == true)
+        assert(wideTable?.contains("resizebox") != true)
+        assert(wideTable?.contains("p{") == true)
+        let figure = TranslationTeX.body("![土壤侵蚀示意图](figure)\n\n正文。", spanningFloats: true)
+        assert(figure.contains("\\begin{figure*}"))
+        assert(figure.contains("土壤侵蚀示意图"))
         let columnFixture = #"\documentclass[twocolumn]{article}\begin{document}"# + String(repeating: "Column layout evidence with several words on each line. ", count: 300) + #"\end{document}"#
         let columnResult = LearningReport.exportSource(columnFixture, to: URL(fileURLWithPath: "/tmp/pc-columns.tex"))
         guard let columnPDF = columnResult.pdf else { fatalError(columnResult.message) }
         assert(PaperLayout.inspect(columnPDF).columns == 2)
         var columnDoc = doc
         columnDoc.path = columnPDF.path
-        let columnSource = TranslationTeX.document(doc: columnDoc, pages: [0: "# 研究方法\n\n| 参数 | 含义 |\n| --- | --- |\n| $n$ | 数量 |\n\n正文与公式 $x^2$。"], language: "简体中文")
-        assert(columnSource.contains("\\begin{multicols}{2}"))
+        let columnMarkdown = """
+        # 研究方法
+
+        ![实验装置](figure)
+
+        | 参数 | 含义 | 样本 | 区间 | 备注 |
+        | --- | --- | --- | --- | --- |
+        | $n$ | 观测数量 | 128 | 0到1 | 需要完整句子说明，不能缩成看不清的小字 |
+
+        正文与公式 $x^2$。
+        """
+        let columnSource = TranslationTeX.document(doc: columnDoc, pages: [0: columnMarkdown], language: "简体中文")
+        assert(columnSource.contains("twocolumn"))
+        assert(!columnSource.contains("multicols"))
+        assert(!columnSource.contains("resizebox"))
+        assert(columnSource.contains("\\begin{table*}"))
+        assert(columnSource.contains("\\begin{figure*}"))
         let columnTranslation = LearningReport.exportSource(columnSource, to: URL(fileURLWithPath: "/tmp/pc-column-translation.tex"))
         guard columnTranslation.pdf != nil else { fatalError(columnTranslation.message) }
         print("PASS: continuous flow, source bookmarks, source dimensions, two columns and table compilation")

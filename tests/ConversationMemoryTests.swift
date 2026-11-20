@@ -36,6 +36,11 @@ final class LLMClient {
         let restored = try JSONDecoder().decode(DocState.self, from: JSONEncoder().encode(state))
         assert(restored.conversationMemory?.coveredCount == start)
         assert(ConversationContext.valid(memory, history: Array(history.dropFirst())) == nil)
-        print("PASS: 100 exchanges, bounded recent context, batched summary, reuse, persistence, invalidation")
+        let concise = ChatEngine.systemPrompt(doc: doc, detail: .concise)
+        let detailed = ChatEngine.systemPrompt(doc: doc, detail: .detailed)
+        assert(concise.contains("不超过 400 字"))
+        assert(detailed.contains("【回答篇幅】详细"))
+        assert(!detailed.contains("不超过 400 字"))
+        print("PASS: 100 exchanges, bounded recent context, batched summary, reuse, persistence, invalidation, answer length")
     }
 }

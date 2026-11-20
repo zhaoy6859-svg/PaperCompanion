@@ -20,6 +20,9 @@ enum Theme {
             ? NSColor(calibratedRed: 0.62, green: 0.65, blue: 0.94, alpha: 1)
             : NSColor(calibratedRed: 0.34, green: 0.38, blue: 0.65, alpha: 1)
     }
+
+    /// Signature fill for the one primary action. Dark enough for white type in both appearances.
+    static let cta = NSColor(calibratedRed: 0.28, green: 0.31, blue: 0.66, alpha: 1)
     static let subtleBorder = NSColor.separatorColor.withAlphaComponent(0.55)
 
     static let paperBackground = NSColor(name: nil) { appearance in
@@ -46,6 +49,13 @@ enum Theme {
 
     static func text(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
         NSFont.systemFont(ofSize: size, weight: weight)
+    }
+
+    /// Serif display face. Chinese falls through to the system Songti cascade, which suits a reading app.
+    static func display(_ size: CGFloat, weight: NSFont.Weight = .semibold) -> NSFont {
+        let base = NSFont.systemFont(ofSize: size, weight: weight)
+        let descriptor = base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor
+        return NSFont(descriptor: descriptor, size: size) ?? base
     }
 
     static func paragraph(spacing: CGFloat = 5, lineSpacing: CGFloat = 4.5, before: CGFloat = 0) -> NSParagraphStyle {

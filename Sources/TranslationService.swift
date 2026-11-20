@@ -28,7 +28,7 @@ final class TranslationService {
     func start(doc: PaperDoc, existing: [Int: String], force: Bool = false) {
         guard !isRunning else { return }
         guard !Prefs.shared.apiKey.isEmpty else { return }
-        instructions = Prefs.shared.translationPrompt.replacingOccurrences(of: "【目标语言】", with: Prefs.shared.translationLanguage) + "\n目标语言：" + Prefs.shared.translationLanguage + "\n保留原文的文章标题、作者、章节编号、标题级别（用 Markdown # / ## / ###）、段落、列表、表格和公式编号，依照原文顺序。不要添加页标题、不要重复页眉页脚；跨页段落自然衔接。必须使用 $...$ 和 $$...$$ 表达全部数学公式；若图片和文字均无法可靠识别，写【公式识别待核对，参见原文该页】，不得猜测符号或输出乱码方框。"
+        instructions = Prefs.shared.translationPrompt.replacingOccurrences(of: "【目标语言】", with: Prefs.shared.translationLanguage) + "\n目标语言：" + Prefs.shared.translationLanguage + "\n保留原文的文章标题、作者、章节编号、标题级别（用 Markdown # / ## / ###）、段落、列表、表格和公式编号，依照原文顺序。不要添加页标题、不要重复页眉页脚；跨页段落自然衔接。必须使用 $...$ 和 $$...$$ 表达全部数学公式；若图片和文字均无法可靠识别，写【公式识别待核对，参见原文该页】，不得猜测符号或输出乱码方框。\n排版补充：每张图单独一行写成 ![图注](figure)，只翻译图注，不要用文字复述图中内容，也不要猜测图的坐标。宽表格保持 Markdown 表格，单元格写完整句子。跨栏内容按阅读顺序书写，不要为了模仿原版分栏而拆开段落。"
 
         self.doc = doc
         let pending = doc.pages

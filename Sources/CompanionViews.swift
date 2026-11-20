@@ -38,80 +38,309 @@ enum CompanionArt {
     }
 }
 
+final class AccentButton: NSButton {
+    private var hover = false
+
+    init(title: String) {
+        super.init(frame: .zero)
+        self.title = title
+        isBordered = false
+        wantsLayer = true
+        layer?.cornerRadius = 15
+        layer?.masksToBounds = false
+        setButtonType(.momentaryChange)
+        font = Theme.text(14, weight: .semibold)
+        translatesAutoresizingMaskIntoConstraints = false
+        heightAnchor.constraint(equalToConstant: 44).isActive = true
+        widthAnchor.constraint(greaterThanOrEqualToConstant: 236).isActive = true
+        applyTitle()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let fill = (hover || isHighlighted) ? Theme.cta.blended(withFraction: 0.14, of: .white) ?? Theme.cta : Theme.cta
+        layer?.backgroundColor = fill.cgColor
+        layer?.shadowColor = Theme.cta.cgColor
+        layer?.shadowOpacity = hover ? 0.42 : 0.28
+        layer?.shadowRadius = hover ? 18 : 14
+        layer?.shadowOffset = CGSize(width: 0, height: -5)
+    }
+
+    private func applyTitle() {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        attributedTitle = NSAttributedString(string: "   \(title)   ", attributes: [
+            .font: Theme.text(14, weight: .semibold),
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: style,
+        ])
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        hover = true
+        animateLift(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hover = false
+        animateLift(false)
+    }
+
+    private func animateLift(_ lifted: Bool) {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            needsDisplay = true
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            animator().layer?.transform = lifted ? CATransform3DMakeTranslation(0, 1, 0) : CATransform3DIdentity
+        }
+        needsDisplay = true
+    }
+}
+
+final class WelcomeAtmosphere: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        Theme.paperBackground.setFill()
+        bounds.fill()
+
+        let indigo = NSColor(calibratedRed: 0.46, green: 0.50, blue: 0.95, alpha: dark ? 0.38 : 0.24)
+        if let glow = NSGradient(colors: [indigo, indigo.withAlphaComponent(0)]) {
+            let center = NSPoint(x: bounds.midX - bounds.width * 0.16, y: bounds.midY + 24)
+            let radius = min(bounds.width, bounds.height) * 0.46
+            glow.draw(fromCenter: center, radius: 8, toCenter: center, radius: radius, options: [])
+        }
+        let warm = NSColor(calibratedRed: 0.95, green: 0.62, blue: 0.48, alpha: dark ? 0.14 : 0.16)
+        if let glow = NSGradient(colors: [warm, warm.withAlphaComponent(0)]) {
+            let center = NSPoint(x: bounds.maxX - bounds.width * 0.08, y: bounds.minY + bounds.height * 0.12)
+            glow.draw(fromCenter: center, radius: 4, toCenter: center, radius: 280, options: [])
+        }
+    }
+}
+
+final class PoseChip: NSView {
+    init(image: NSImage, caption: String) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant: 76).isActive = true
+        heightAnchor.constraint(equalToConstant: 92).isActive = true
+
+        let face = NSImageView()
+        face.image = image
+        face.imageScaling = .scaleProportionallyUpOrDown
+        face.translatesAutoresizingMaskIntoConstraints = false
+        let label = NSTextField(labelWithString: caption)
+        label.font = Theme.text(10, weight: .medium)
+        label.textColor = .tertiaryLabelColor
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(face)
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            face.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            face.centerXAnchor.constraint(equalTo: centerXAnchor),
+            face.widthAnchor.constraint(equalToConstant: 58),
+            face.heightAnchor.constraint(equalToConstant: 58),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.cornerRadius = 16
+        layer?.backgroundColor = (dark ? NSColor.white.withAlphaComponent(0.06) : NSColor.white.withAlphaComponent(0.72)).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = Theme.hairline.cgColor
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = dark ? 0.28 : 0.08
+        layer?.shadowRadius = 12
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        layer?.masksToBounds = false
+    }
+}
+
 final class CompanionWelcomeView: NSView {
     var onOpen: (() -> Void)?
     var onResume: (() -> Void)?
+    private let atmosphere = WelcomeAtmosphere()
+    private let portrait = CompanionArt.portrait(CompanionArt.welcome)
+    private var openButton: NSButton?
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = Theme.paperBackground.cgColor
-        let portrait = CompanionArt.portrait(CompanionArt.welcome)
+
+        atmosphere.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(atmosphere)
+
         let text = NSStackView()
         text.orientation = .vertical
         text.alignment = .leading
-        text.spacing = 18
+        text.spacing = 14
         text.translatesAutoresizingMaskIntoConstraints = false
-        func label(_ title: String, size: CGFloat, color: NSColor) -> NSTextField {
-            let label = NSTextField(wrappingLabelWithString: title)
-            label.font = Theme.text(size, weight: size > 22 ? .semibold : .regular)
-            label.textColor = color
-            return label
-        }
-        text.addArrangedSubview(label("PAPER COMPANION", size: 11, color: Theme.accent))
-        text.addArrangedSubview(label("今天，也一起\n读懂一篇论文吧。", size: 32, color: .labelColor))
-        text.addArrangedSubview(label("我是你的论文伴侣。\n从第一个不懂的概念，到终于想通的瞬间，\n我都会陪你一起读下去。", size: 14, color: .secondaryLabelColor))
-        let open = NSButton(title: "选择论文，开始学习  →", target: self, action: #selector(openPaper))
-        open.bezelStyle = .rounded
-        open.controlSize = .large
+
+        text.addArrangedSubview(tracked("PAPER COMPANION", size: 11, color: Theme.accent, kern: 1.8))
+        let headline = NSTextField(wrappingLabelWithString: "今天，也一起\n读懂一篇论文吧。")
+        headline.font = Theme.display(32, weight: .bold)
+        headline.textColor = .labelColor
+        headline.maximumNumberOfLines = 2
+        text.addArrangedSubview(headline)
+        let body = NSTextField(wrappingLabelWithString: "我是你的论文伴侣。\n从第一个不懂的概念，到终于想通的瞬间，\n我都会陪你一起读下去。")
+        body.font = Theme.text(14)
+        body.textColor = .secondaryLabelColor
+        body.maximumNumberOfLines = 4
+        text.addArrangedSubview(body)
+        text.setCustomSpacing(20, after: body)
+
+        let open = AccentButton(title: "选择论文，开始学习  →")
+        open.target = self
+        open.action = #selector(openPaper)
         open.keyEquivalent = "\r"
+        openButton = open
         text.addArrangedSubview(open)
+
         if let path = Prefs.shared.lastDocPath, FileManager.default.fileExists(atPath: path) {
-            let resume = NSButton(title: "继续上次阅读", target: self, action: #selector(resumePaper))
+            let name = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+            let resume = NSButton(title: "继续上次 · \(name)", target: self, action: #selector(resumePaper))
             resume.bezelStyle = .inline
             resume.isBordered = false
+            resume.font = Theme.text(13, weight: .medium)
             resume.contentTintColor = Theme.accent
+            resume.alignment = .left
+            resume.lineBreakMode = .byTruncatingTail
+            resume.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            resume.translatesAutoresizingMaskIntoConstraints = false
+            resume.widthAnchor.constraint(lessThanOrEqualToConstant: 380).isActive = true
             text.addArrangedSubview(resume)
         }
-        text.addArrangedSubview(label("拖入 PDF 也可以  ·  ⌘O 打开文献", size: 11, color: .tertiaryLabelColor))
 
-        // A few more poses of the same companion, as a small reading crew.
+        text.addArrangedSubview(plain("拖入 PDF 也可以  ·  ⌘O 打开文献", size: 11, color: .tertiaryLabelColor))
+
+        let captions = ["图表", "笔记", "划线"]
         let castStack = NSStackView()
         castStack.orientation = .horizontal
-        castStack.spacing = 8
-        castStack.alignment = .bottom
+        castStack.spacing = 10
+        castStack.alignment = .centerY
         castStack.translatesAutoresizingMaskIntoConstraints = false
-        for member in CompanionArt.strip {
-            let face = NSImageView()
-            face.image = member.image
-            face.imageScaling = .scaleProportionallyUpOrDown
-            face.toolTip = member.name
-            face.translatesAutoresizingMaskIntoConstraints = false
-            face.widthAnchor.constraint(equalToConstant: 54).isActive = true
-            face.heightAnchor.constraint(equalToConstant: 54).isActive = true
-            castStack.addArrangedSubview(face)
+        for (index, member) in CompanionArt.strip.enumerated() {
+            let caption = index < captions.count ? captions[index] : member.name
+            castStack.addArrangedSubview(PoseChip(image: member.image, caption: caption))
         }
-        text.addArrangedSubview(label("陪你读、陪你算、陪你记", size: 10, color: .tertiaryLabelColor))
+        text.addArrangedSubview(plain("陪你读、陪你算、陪你记", size: 10, color: .tertiaryLabelColor))
         text.addArrangedSubview(castStack)
+
+        portrait.wantsLayer = true
+        portrait.shadow = NSShadow()
+        applyPortraitShadow()
+
         let group = NSView()
         group.translatesAutoresizingMaskIntoConstraints = false
         addSubview(group)
         group.addSubview(portrait)
         group.addSubview(text)
         NSLayoutConstraint.activate([
-            group.widthAnchor.constraint(equalToConstant: 820),
-            group.heightAnchor.constraint(equalToConstant: 480),
+            atmosphere.leadingAnchor.constraint(equalTo: leadingAnchor),
+            atmosphere.trailingAnchor.constraint(equalTo: trailingAnchor),
+            atmosphere.topAnchor.constraint(equalTo: topAnchor),
+            atmosphere.bottomAnchor.constraint(equalTo: bottomAnchor),
+
             group.centerXAnchor.constraint(equalTo: centerXAnchor),
-            group.centerYAnchor.constraint(equalTo: centerYAnchor),
+            group.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -4),
+            group.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
+            group.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24),
+
             portrait.leadingAnchor.constraint(equalTo: group.leadingAnchor),
-            portrait.widthAnchor.constraint(equalToConstant: 390),
-            portrait.heightAnchor.constraint(equalTo: group.heightAnchor),
             portrait.centerYAnchor.constraint(equalTo: group.centerYAnchor),
-            text.leadingAnchor.constraint(equalTo: portrait.trailingAnchor, constant: 30),
+            portrait.widthAnchor.constraint(equalToConstant: 340),
+            portrait.heightAnchor.constraint(equalToConstant: 340),
+            portrait.topAnchor.constraint(greaterThanOrEqualTo: group.topAnchor),
+            portrait.bottomAnchor.constraint(lessThanOrEqualTo: group.bottomAnchor),
+
+            text.leadingAnchor.constraint(equalTo: portrait.trailingAnchor, constant: 28),
             text.trailingAnchor.constraint(equalTo: group.trailingAnchor),
             text.centerYAnchor.constraint(equalTo: group.centerYAnchor),
+            text.widthAnchor.constraint(equalToConstant: 380),
+            text.topAnchor.constraint(greaterThanOrEqualTo: group.topAnchor),
+            text.bottomAnchor.constraint(lessThanOrEqualTo: group.bottomAnchor),
         ])
     }
+
     required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        startFloat()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        atmosphere.needsDisplay = true
+        applyPortraitShadow()
+    }
+
+    private func applyPortraitShadow() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(dark ? 0.45 : 0.16)
+        shadow.shadowBlurRadius = 28
+        shadow.shadowOffset = NSSize(width: 0, height: -10)
+        portrait.shadow = shadow
+    }
+
+    private func startFloat() {
+        portrait.layer?.removeAnimation(forKey: "float")
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let float = CABasicAnimation(keyPath: "transform.translation.y")
+        float.fromValue = -7
+        float.toValue = 7
+        float.duration = 3.6
+        float.autoreverses = true
+        float.repeatCount = .infinity
+        float.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        portrait.layer?.add(float, forKey: "float")
+    }
+
+    private func tracked(_ string: String, size: CGFloat, color: NSColor, kern: CGFloat) -> NSTextField {
+        let field = NSTextField(labelWithString: "")
+        field.attributedStringValue = NSAttributedString(string: string, attributes: [
+            .font: Theme.text(size, weight: .semibold),
+            .foregroundColor: color,
+            .kern: kern,
+        ])
+        return field
+    }
+
+    private func plain(_ string: String, size: CGFloat, color: NSColor) -> NSTextField {
+        let field = NSTextField(wrappingLabelWithString: string)
+        field.font = Theme.text(size, weight: size > 20 ? .semibold : .regular)
+        field.textColor = color
+        return field
+    }
+
+    /// Return opens a paper only while this welcome is the screen in front.
+    func setDefaultActionEnabled(_ enabled: Bool) {
+        openButton?.keyEquivalent = enabled ? "\r" : ""
+    }
+
     @objc private func openPaper() { onOpen?() }
     @objc private func resumePaper() { onResume?() }
 }

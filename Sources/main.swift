@@ -22,9 +22,10 @@ enum Debug {
 
 // MARK: - App delegate
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var mainWindow: MainWindowController!
     private var settingsWindow: SettingsWindowController?
+    private var shelfMenu: NSMenu?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Store.prepare()
@@ -35,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         mainWindow = MainWindowController(startupDocument: startup)
         mainWindow.onOpenSettings = { [weak self] in self?.showSettings() }
+        mainWindow.presentLaunchSplash()
         mainWindow.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         Prefs.shared.warmUpKey { [weak self] in
@@ -104,6 +106,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 mainWindow.debugToggleSidebar()
             }
         }
+        if arguments.contains("--thumbs") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [self] in
+                mainWindow.debugShowThumbnails()
+            }
+        }
+        if let findIndex = arguments.firstIndex(of: "--find"), findIndex + 1 < arguments.count {
+            let query = arguments[findIndex + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [self] in
+                mainWindow.debugFind(query)
+            }
+        }
         if let askIndex = arguments.firstIndex(of: "--ask"), askIndex + 1 < arguments.count {
             let question = arguments[askIndex + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + (arguments.contains("--level") ? 2.4 : 1.2)) { [self] in
@@ -169,6 +182,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let open = NSMenuItem(title: "打开论文…", action: #selector(openDocument), keyEquivalent: "o")
         open.target = self
         fileMenu.addItem(open)
+        let library = NSMenuItem(title: "书房", action: #selector(showLibraryMenu), keyEquivalent: "l")
+        library.keyEquivalentModifierMask = [.command, .shift]
+        library.target = self
+        fileMenu.addItem(library)
+        let addShelf = NSMenuItem(title: "加入书架", action: nil, keyEquivalent: "")
+        let shelves = NSMenu(title: "加入书架")
+        shelves.delegate = self
+        shelfMenu = shelves
+        addShelf.submenu = shelves
+        fileMenu.addItem(addShelf)
+        let importFolder = NSMenuItem(title: "导入文件夹…", action: #selector(importFolderMenu), keyEquivalent: "")
+        importFolder.target = self
+        fileMenu.addItem(importFolder)
+        let zotero = NSMenuItem(title: "从 Zotero 导入", action: #selector(importZoteroMenu), keyEquivalent: "")
+        zotero.target = self
+        fileMenu.addItem(zotero)
         fileMenu.addItem(withTitle: "关闭窗口", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         fileItem.submenu = fileMenu
 
@@ -182,6 +211,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "拷贝", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(.separator())
+        let find = NSMenuItem(title: "查找…", action: #selector(findMenu), keyEquivalent: "f")
+        find.target = self
+        editMenu.addItem(find)
+        let findNext = NSMenuItem(title: "查找下一个", action: #selector(findNextMenu), keyEquivalent: "g")
+        findNext.target = self
+        editMenu.addItem(findNext)
+        let findPrevious = NSMenuItem(title: "查找上一个", action: #selector(findPreviousMenu), keyEquivalent: "G")
+        findPrevious.target = self
+        editMenu.addItem(findPrevious)
         editItem.submenu = editMenu
 
         let viewItem = NSMenuItem()
@@ -195,6 +234,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         translation.keyEquivalentModifierMask = [.command, .shift]
         translation.target = self
         viewMenu.addItem(translation)
+        let navigator = NSMenuItem(title: "显示 / 收起目录", action: #selector(toggleNavigatorMenu), keyEquivalent: "d")
+        navigator.keyEquivalentModifierMask = [.command, .shift]
+        navigator.target = self
+        viewMenu.addItem(navigator)
         let sidebar = NSMenuItem(title: "收起 / 展开助手", action: #selector(toggleSidebarMenu), keyEquivalent: "s")
         sidebar.keyEquivalentModifierMask = [.command, .shift]
         sidebar.target = self
@@ -219,6 +262,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.pickFile()
     }
 
+    @objc private func showLibraryMenu() { mainWindow.showLibrary() }
+    @objc private func importFolderMenu() { mainWindow.importFolderPanel() }
+    @objc private func importZoteroMenu() { mainWindow.importZotero() }
+
+    @objc private func toggleShelfItem(_ sender: NSMenuItem) {
+        guard let path = mainWindow.currentPaperPath(),
+              let id = sender.representedObject as? UUID else { return }
+        mainWindow.toggleShelf(path: path, collection: id)
+    }
+
+    @objc private func createShelfMenu() {
+        mainWindow.promptNewShelf(assignCurrent: mainWindow.currentPaperPath() != nil)
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === shelfMenu else { return }
+        menu.removeAllItems()
+        let path = mainWindow?.currentPaperPath()
+        let index = ShelfStore.read()
+        let membership = path.map { ShelfStore.membership(path: $0) } ?? []
+        if path == nil {
+            menu.addItem(withTitle: "先打开一篇论文", action: nil, keyEquivalent: "")
+        } else if index.collections.isEmpty {
+            menu.addItem(withTitle: "还没有书架", action: nil, keyEquivalent: "")
+        }
+        for collection in index.collections {
+            let item = NSMenuItem(title: collection.name, action: #selector(toggleShelfItem(_:)), keyEquivalent: "")
+            item.target = self
+            item.state = membership.contains(collection.id) ? .on : .off
+            item.representedObject = collection.id
+            item.isEnabled = path != nil
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let create = NSMenuItem(title: "新建书架…", action: #selector(createShelfMenu), keyEquivalent: "")
+        create.target = self
+        menu.addItem(create)
+    }
+
     @objc private func showSettingsMenu() {
         showSettings()
     }
@@ -231,6 +313,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.showTranslationFromMenu()
     }
 
+    @objc private func findMenu() { mainWindow.findInDocument() }
+    @objc private func findNextMenu() { mainWindow.findNextInDocument() }
+    @objc private func findPreviousMenu() { mainWindow.findPreviousInDocument() }
+    @objc private func toggleNavigatorMenu() { mainWindow.toggleNavigatorFromMenu() }
     @objc private func toggleSidebarMenu() { mainWindow.toggleSidebarFromMenu() }
     @objc private func zoomInMenu() { mainWindow.zoomInFromMenu() }
     @objc private func zoomOutMenu() { mainWindow.zoomOutFromMenu() }

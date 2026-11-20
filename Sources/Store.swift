@@ -46,7 +46,23 @@ enum Store {
         do {
             let data = try JSONEncoder().encode(copy)
             try data.write(to: stateURL(for: state.doc.url), options: .atomic)
+            ShelfStore.remember(copy)
         } catch { onSaveError?("保存失败：" + error.localizedDescription) }
+    }
+
+    /// Move a paper's notes when the file itself moves.
+    static func relocateState(from old: URL, to new: URL) {
+        let source = stateURL(for: old)
+        guard FileManager.default.fileExists(atPath: source.path),
+              let data = try? Data(contentsOf: source),
+              var state = try? JSONDecoder().decode(DocState.self, from: data) else { return }
+        state.doc.path = new.standardizedFileURL.path
+        let destination = stateURL(for: new)
+        guard let encoded = try? JSONEncoder().encode(state) else { return }
+        try? encoded.write(to: destination, options: .atomic)
+        if source.path != destination.path {
+            try? FileManager.default.removeItem(at: source)
+        }
     }
 
     static func remove(for url: URL) {

@@ -215,6 +215,15 @@ final class HighlightOverlay: NSView {
 
 final class ReaderPane: NSView {
     let pdfView = PDFView()
+    private let navigator = ReadingNavigator()
+    private var navigatorWidth: NSLayoutConstraint!
+    private let findBar = PaperFindBar()
+    private var findBarHeight: NSLayoutConstraint!
+    private var findBarTop: NSLayoutConstraint!
+    private var findWork: DispatchWorkItem?
+    private var findMatches: [PDFSelection] = []
+    private var findIndex = 0
+    private var findQuery = ""
     private let toolbar = SelectionToolbar()
     private let overlay = RegionOverlay()
     private let highlightOverlay = HighlightOverlay()
@@ -229,7 +238,7 @@ final class ReaderPane: NSView {
     private var translatedDestination: PDFDestination?
     private(set) var isShowingTranslation = false
     private var translationPageMap: [Int] = []
-    private let emptyView = CompanionWelcomeView()
+    private let emptyView = LibraryHomeView()
     private let readingProgress = ReadingProgressView()
     private let hintBar = NSView()
     private let hintLabel = NSTextField(labelWithString: "拖动框选论文里的图、表或公式，松手后提问")
@@ -244,6 +253,11 @@ final class ReaderPane: NSView {
     var onDropFile: ((URL) -> Void)?
     var onRequestOpen: (() -> Void)?
     var onRecentPicked: ((URL) -> Void)?
+    var onImportFolder: (() -> Void)?
+    var onImportZotero: (() -> Void)?
+    var onRelocatePaper: ((URL) -> Void)?
+    var onLibraryStatus: ((String, Bool) -> Void)?
+    var onNavigatorChanged: ((Bool) -> Void)?
 
     private var pendingSelection: (text: String, page: Int)?
     private var toolbarWorkItem: DispatchWorkItem?
@@ -273,6 +287,11 @@ final class ReaderPane: NSView {
         pdfView.pageBreakMargins = NSEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
         pdfView.backgroundColor = NSColor.underPageBackgroundColor
         pdfView.translatesAutoresizingMaskIntoConstraints = false
+        navigator.attach(pdfView)
+        navigator.onJump = { [weak self] destination in self?.pdfView.go(to: destination) }
+        navigator.onCollapse = { [weak self] in self?.setNavigatorVisible(false, persist: true) }
+        navigator.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(rawValue: 100), for: .horizontal)
+        addSubview(navigator)
         addSubview(pdfView)
 
         highlightOverlay.pdfView = pdfView
@@ -332,13 +351,36 @@ final class ReaderPane: NSView {
         let dividerDrag = NSPanGestureRecognizer(target: self, action: #selector(handleTranslationDivider(_:)))
         translationDivider.addGestureRecognizer(dividerDrag)
 
+        findBar.isHidden = true
+        findBar.onQuery = { [weak self] text in self?.scheduleFind(text) }
+        findBar.onNext = { [weak self] in self?.findNext() }
+        findBar.onPrevious = { [weak self] in self?.findPrevious() }
+        findBar.onClose = { [weak self] in self?.endFind() }
+        addSubview(findBar)
+
         buildEmptyState()
 
         translationWidth = translationColumn.heightAnchor.constraint(equalToConstant: 0)
+        navigatorWidth = navigator.widthAnchor.constraint(equalToConstant: 0)
+        findBarHeight = findBar.heightAnchor.constraint(equalToConstant: 0)
+        findBarTop = findBar.topAnchor.constraint(equalTo: translationColumn.bottomAnchor)
+        let findWidth = findBar.widthAnchor.constraint(equalToConstant: 420)
+        findWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            pdfView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            navigator.leadingAnchor.constraint(equalTo: leadingAnchor),
+            navigator.topAnchor.constraint(equalTo: translationColumn.bottomAnchor),
+            navigator.bottomAnchor.constraint(equalTo: bottomAnchor),
+            navigatorWidth,
+
+            findBar.leadingAnchor.constraint(equalTo: navigator.trailingAnchor, constant: 12),
+            findBarTop,
+            findBar.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
+            findBarHeight,
+            findWidth,
+
+            pdfView.leadingAnchor.constraint(equalTo: navigator.trailingAnchor),
             pdfView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            pdfView.topAnchor.constraint(equalTo: translationColumn.bottomAnchor),
+            pdfView.topAnchor.constraint(equalTo: findBar.bottomAnchor),
             pdfView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             translationDivider.widthAnchor.constraint(equalToConstant: 1),
@@ -393,6 +435,11 @@ final class ReaderPane: NSView {
         emptyView.onResume = { [weak self] in
             if let path = Prefs.shared.lastDocPath { self?.onRecentPicked?(URL(fileURLWithPath: path)) }
         }
+        emptyView.onOpenPaper = { [weak self] url in self?.onRecentPicked?(url) }
+        emptyView.onImportFolder = { [weak self] in self?.onImportFolder?() }
+        emptyView.onImportZotero = { [weak self] in self?.onImportZotero?() }
+        emptyView.onRelocate = { [weak self] url in self?.onRelocatePaper?(url) }
+        emptyView.onStatus = { [weak self] text, empty in self?.onLibraryStatus?(text, empty) }
         NSLayoutConstraint.activate([
             emptyView.leadingAnchor.constraint(equalTo: leadingAnchor),
             emptyView.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -419,11 +466,17 @@ final class ReaderPane: NSView {
         originalDestination = nil
         translatedDestination = nil
         isShowingTranslation = false
+        endFind()
         pdfView.document = document
         emptyView.isHidden = !empty
         pdfView.isHidden = empty
+        if empty { emptyView.reload() } else { emptyView.suspendShortcut() }
         toolbar.isHidden = true
+        navigator.reload()
+        setNavigatorVisible(Prefs.shared.navigatorVisible, persist: false)
     }
+
+    func reloadLibrary() { emptyView.reload() }
 
     // MARK: Translation column
 
@@ -513,6 +566,8 @@ final class ReaderPane: NSView {
         if isShowingTranslation { translatedDestination = pdfView.currentDestination }
         else { originalDestination = pdfView.currentDestination }
         isShowingTranslation = translated
+        let resumeQuery = findBar.isHidden ? nil : findBar.query
+        clearFindHighlights()
         pdfView.document = target
         pdfView.layoutDocumentView()
         if let first = target.page(at: 0) { pdfView.go(to: first) }
@@ -524,6 +579,8 @@ final class ReaderPane: NSView {
         }
         highlightOverlay.isHidden = translated
         toolbar.isHidden = true
+        navigator.reload()
+        if let resumeQuery { scheduleFind(resumeQuery, delay: 0) }
         fitWidth()
         onPageChanged?(currentPageIndex())
     }
@@ -616,6 +673,11 @@ final class ReaderPane: NSView {
 
     @objc private func selectionChanged() {
         toolbarWorkItem?.cancel()
+        guard findBar.isHidden else {
+            toolbar.isHidden = true
+            pendingSelection = nil
+            return
+        }
         guard !isRegionMode else { return }
         guard let selection = pdfView.currentSelection,
               let page = selection.pages.first,
@@ -701,7 +763,133 @@ final class ReaderPane: NSView {
     @objc private func pageChanged() {
         let index = currentPageIndex()
         translationColumn.update(currentPage: index)
+        if let page = pdfView.currentPage, let document = pdfView.document {
+            navigator.highlight(page: document.index(for: page))
+        }
         onPageChanged?(index)
+    }
+
+    // MARK: Find and navigator
+
+    func beginFind(_ preset: String? = nil) {
+        if !emptyView.isHidden {
+            emptyView.focusSearch()
+            return
+        }
+        guard pdfView.document != nil else { return }
+        findBar.isHidden = false
+        findBarHeight.constant = 36
+        findBarTop.constant = 8
+        if let preset { findBar.setQuery(preset) }
+        window?.makeFirstResponder(findBar.field)
+        findBar.selectAll()
+        scheduleFind(findBar.query, delay: preset == nil ? 0.2 : 0)
+    }
+
+    func findNext() {
+        guard emptyView.isHidden, pdfView.document != nil else { beginFind(); return }
+        if findBar.isHidden { beginFind(); return }
+        findWork?.cancel()
+        let query = findBar.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query != findQuery || (findMatches.isEmpty && !query.isEmpty) {
+            runFind(query)
+            return
+        }
+        stepFind(1)
+    }
+
+    func findPrevious() {
+        guard emptyView.isHidden, pdfView.document != nil else { return }
+        if findBar.isHidden { beginFind(); return }
+        findWork?.cancel()
+        let query = findBar.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query != findQuery { runFind(query); return }
+        stepFind(-1)
+    }
+
+    func endFind() {
+        findWork?.cancel()
+        findBar.isHidden = true
+        findBarHeight.constant = 0
+        findBarTop.constant = 0
+        findBar.setStatus("")
+        clearFindHighlights()
+        pdfView.clearSelection()
+        guard let responder = window?.firstResponder else { return }
+        if responder === findBar.field || (responder as? NSTextView)?.delegate as AnyObject? === findBar.field {
+            window?.makeFirstResponder(pdfView)
+        }
+    }
+
+    func toggleNavigator() {
+        setNavigatorVisible(navigatorWidth.constant < 1, persist: true)
+    }
+
+    func showThumbnailNavigator() {
+        setNavigatorVisible(true, persist: false)
+        navigator.selectThumbnails()
+    }
+
+    private func setNavigatorVisible(_ visible: Bool, persist: Bool) {
+        let show = visible && emptyView.isHidden && pdfView.document != nil
+        navigator.isHidden = !show
+        navigatorWidth.constant = show ? 232 : 0
+        if persist { Prefs.shared.navigatorVisible = visible }
+        onNavigatorChanged?(show)
+        if show { navigator.reload() }
+    }
+
+    private func scheduleFind(_ text: String, delay: Double = 0.2) {
+        findWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.findBar.query == text else { return }
+            self.runFind(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        findWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func runFind(_ query: String) {
+        guard let document = pdfView.document else { return }
+        findQuery = query
+        guard !query.isEmpty else {
+            findMatches = []
+            findIndex = 0
+            pdfView.highlightedSelections = []
+            findBar.setStatus("")
+            return
+        }
+        let matches = document.findString(query, withOptions: [.caseInsensitive, .diacriticInsensitive])
+        findMatches = matches
+        findIndex = 0
+        pdfView.highlightedSelections = matches
+        if let first = matches.first {
+            pdfView.setCurrentSelection(first, animate: false)
+            pdfView.go(to: first)
+            findBar.setStatus("1/\(matches.count)")
+        } else {
+            pdfView.clearSelection()
+            findBar.setStatus("没有匹配")
+        }
+    }
+
+    private func stepFind(_ delta: Int) {
+        guard !findMatches.isEmpty else {
+            findBar.setStatus(findQuery.isEmpty ? "" : "没有匹配")
+            return
+        }
+        findIndex = (findIndex + delta + findMatches.count) % findMatches.count
+        let match = findMatches[findIndex]
+        pdfView.setCurrentSelection(match, animate: false)
+        pdfView.go(to: match)
+        findBar.setStatus("\(findIndex + 1)/\(findMatches.count)")
+    }
+
+    private func clearFindHighlights() {
+        findMatches = []
+        findIndex = 0
+        findQuery = ""
+        pdfView.highlightedSelections = []
     }
 
     @objc private func openTapped() {
@@ -716,7 +904,7 @@ final class ReaderPane: NSView {
     // MARK: Drag & drop
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard let url = droppedURL(sender), ["pdf"].contains(url.pathExtension.lowercased()) else { return [] }
+        guard let url = droppedURL(sender), Self.isPDF(url) || Self.isDirectory(url) else { return [] }
         return .copy
     }
 
@@ -728,5 +916,12 @@ final class ReaderPane: NSView {
 
     private func droppedURL(_ sender: NSDraggingInfo) -> URL? {
         (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL])?.first
+    }
+
+    private static func isPDF(_ url: URL) -> Bool { url.pathExtension.lowercased() == "pdf" }
+
+    private static func isDirectory(_ url: URL) -> Bool {
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
     }
 }
