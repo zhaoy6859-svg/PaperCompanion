@@ -67,6 +67,15 @@ import Foundation
         assert(ShelfStore.read().papers.contains { $0.path == doc.path }, "opening a paper puts it back on the shelf")
         assert(!ShelfStore.read().dismissedPaths.contains(doc.path))
 
+        let mppi = sample(path: "/tmp/mppi.pdf", title: "Multi-Source Prediction-Powered Inference", excerpt: "ppi", notes: 0, questions: 0)
+        let other = sample(path: "/tmp/other.pdf", title: "Land use and climate", excerpt: "erosion", notes: 0, questions: 0)
+        let opened = ShelfStore.paperToOpen("帮我打开mppi哪篇文献", in: [mppi, other])
+        assert(opened?.path == mppi.path, "mppi opens the prediction-powered paper")
+        assert(ShelfStore.paperToOpen("这段在说什么", in: [mppi]) == nil)
+        let parsed = ShelfStore.consumeOpens("已经找到。\n[[open:mppi]]")
+        assert(parsed.queries == ["mppi"])
+        assert(!parsed.text.contains("[[open:"))
+
         print("PASS: search, shelves, dismiss, import, page memory")
     }
 

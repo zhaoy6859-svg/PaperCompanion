@@ -2,14 +2,16 @@ import Foundation
 
 enum Debug { static func log(_ message: String) {} }
 enum LLMError: Error { case noAPIKey, empty }
+enum ReasoningEffort: String { case none, low, high, max }
 final class Prefs {
     static let shared = Prefs()
     var apiKey = "test", baseURL = "local", model = "mock"
+    var reasoningEffort: ReasoningEffort = .high
 }
 final class LLMClient {
     static var requests: [[[String: Any]]] = []
     func cancel() {}
-    func stream(apiKey: String, baseURL: String, model: String, messages: [[String: Any]], temperature: Double = 0.2, maxTokens: Int? = nil, timeout: TimeInterval = 180, onDelta: @escaping (String) -> Void, onFinish: @escaping (Result<String, Error>) -> Void) {
+    func stream(apiKey: String, baseURL: String, model: String, messages: [[String: Any]], temperature: Double = 0.2, reasoning: ReasoningEffort? = nil, maxTokens: Int? = nil, timeout: TimeInterval = 180, onDelta: @escaping (String) -> Void, onFinish: @escaping (Result<String, Error>) -> Void) {
         Self.requests.append(messages)
         onFinish(.success(maxTokens == 3500 ? "记住最早的问题、用户纠正和未解决疑问。" : "回答"))
     }

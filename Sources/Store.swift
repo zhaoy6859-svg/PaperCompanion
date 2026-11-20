@@ -87,3 +87,25 @@ enum Store {
         imagesDir.appendingPathComponent(name)
     }
 }
+
+/// Conversation that is not tied to a paper, used before and after reading.
+struct LoungeRecord: Codable {
+    var threads: [AskThread] = []
+    var conversationMemory: ConversationMemory?
+}
+
+enum LoungeStore {
+    private static var fileURL: URL { Store.root.appendingPathComponent("lounge.json") }
+
+    static func load() -> LoungeRecord {
+        guard let data = try? Data(contentsOf: fileURL),
+              let record = try? JSONDecoder().decode(LoungeRecord.self, from: data) else { return LoungeRecord() }
+        return record
+    }
+
+    static func save(_ record: LoungeRecord) {
+        Store.prepare()
+        guard let data = try? JSONEncoder().encode(record) else { return }
+        try? data.write(to: fileURL, options: .atomic)
+    }
+}

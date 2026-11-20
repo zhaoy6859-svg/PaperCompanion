@@ -28,8 +28,14 @@ final class ComposerTextView: NSTextView {
 final class AssistantPane: NSView, NSTextViewDelegate {
     weak var delegate: AssistantPaneDelegate?
     var currentPage: Int = 0
+    var onPickPaper: ((URL) -> Void)?
+    var onLounge: (() -> Void)?
 
     private let header = NSView()
+    private let avatarView = NSImageView()
+    private let nameLabel = NSTextField(labelWithString: "论文伴侣")
+    private let contextLabel = NSTextField(labelWithString: "还没打开论文，先随便聊聊")
+    private let libraryButton = NSButton()
     private let chatTab = NSButton()
     private let notesTab = NSButton()
     private let statusLabel = NSTextField(labelWithString: "")
@@ -42,15 +48,6 @@ final class AssistantPane: NSView, NSTextViewDelegate {
     private var pendingQuestion = ""
     private var pendingPage = 0
     private var failedStream = false
-    private let anchorBar = NSView()
-    private let anchorLabel = NSTextField(labelWithString: "")
-    private let chipsStack = NSStackView()
-    private let detailControl = NSSegmentedControl(labels: ["精简", "详细"], trackingMode: .selectOne, target: nil, action: nil)
-    private let composerBox = NSView()
-    private let composer = ComposerTextView()
-    private let composerScroll = NSScrollView()
-    private let placeholder = NSTextField(labelWithString: "问关于这篇论文的任何问题…")
-    private let sendButton = NSButton()
 
     // Notes
     private let notesContainer = NSView()
@@ -64,19 +61,11 @@ final class AssistantPane: NSView, NSTextViewDelegate {
     private var studyNotes: String?
     private var studyRunning = false
 
-    private var pendingQuote: String?
     private var isStreaming = false
     private var streamStart = -1
     private var streamBuffer = ""
     private var streamTimer: Timer?
     private var selectedTab = 0
-
-    private static let quickAsks: [(String, String)] = [
-        ("全文摘要", "用 5 句话概括这篇论文：研究问题、方法、主要结果、贡献、局限。"),
-        ("创新点", "这篇论文相对已有工作最实质的新意是什么？具体到机制或假设，不要泛泛而谈。"),
-        ("方法可信吗", "这个方法的假设和实验设计有哪些可被质疑的地方？按重要性排序。"),
-        ("结论", "作者最终能站得住的结论是什么？哪些只是推测？"),
-    ]
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -91,7 +80,11 @@ final class AssistantPane: NSView, NSTextViewDelegate {
     private func build() {
         Debug.log("pane: build start")
         wantsLayer = true
-        layer?.backgroundColor = Theme.sidebarBackground.cgColor
+        layer?.cornerRadius = 18
+        layer?.masksToBounds = true
+        layer?.borderWidth = 1
+        layer?.borderColor = Theme.hairline.cgColor
+        layer?.backgroundColor = Theme.cardBackground.cgColor
 
         buildHeader()
         header.translatesAutoresizingMaskIntoConstraints = false
@@ -109,7 +102,7 @@ final class AssistantPane: NSView, NSTextViewDelegate {
             header.leadingAnchor.constraint(equalTo: leadingAnchor),
             header.trailingAnchor.constraint(equalTo: trailingAnchor),
             header.topAnchor.constraint(equalTo: topAnchor),
-            header.heightAnchor.constraint(equalToConstant: 46),
+            header.heightAnchor.constraint(equalToConstant: 68),
 
             content.leadingAnchor.constraint(equalTo: leadingAnchor),
             content.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -133,7 +126,33 @@ final class AssistantPane: NSView, NSTextViewDelegate {
 
     private func buildHeader() {
         header.wantsLayer = true
-        header.layer?.backgroundColor = Theme.sidebarBackground.cgColor
+        header.layer?.backgroundColor = Theme.cardBackground.cgColor
+
+        avatarView.image = CompanionArt.avatar
+        avatarView.imageScaling = .scaleProportionallyUpOrDown
+        avatarView.wantsLayer = true
+        avatarView.layer?.cornerRadius = 16
+        avatarView.layer?.masksToBounds = true
+        avatarView.translatesAutoresizingMaskIntoConstraints = false
+
+        nameLabel.font = Theme.text(14, weight: .semibold)
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        contextLabel.font = Theme.text(11)
+        contextLabel.textColor = .secondaryLabelColor
+        contextLabel.lineBreakMode = .byTruncatingTail
+        contextLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        libraryButton.title = "书库"
+        libraryButton.isBordered = false
+        libraryButton.font = Theme.text(11, weight: .medium)
+        libraryButton.contentTintColor = Theme.accent
+        libraryButton.image = NSImage(systemSymbolName: "books.vertical", accessibilityDescription: "书库")
+        libraryButton.imagePosition = .imageLeading
+        libraryButton.imageScaling = .scaleProportionallyDown
+        libraryButton.toolTip = "换成另一篇论文的对话，或先随便聊聊"
+        libraryButton.target = self
+        libraryButton.action = #selector(showRoster)
+        libraryButton.translatesAutoresizingMaskIntoConstraints = false
 
         configureTab(chatTab, title: "对话", tag: 0)
         configureTab(notesTab, title: "笔记", tag: 1)
@@ -145,25 +164,41 @@ final class AssistantPane: NSView, NSTextViewDelegate {
 
         settingsButton.iconSetup("slider.horizontal.3", tip: "设置", target: self, action: #selector(settingsTapped), size: 24)
 
-        for view in [chatTab, notesTab, statusLabel, settingsButton] { header.addSubview(view) }
+        for view in [avatarView, nameLabel, contextLabel, libraryButton, chatTab, notesTab, statusLabel, settingsButton] { header.addSubview(view) }
 
         NSLayoutConstraint.activate([
-            chatTab.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 12),
-            chatTab.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            chatTab.heightAnchor.constraint(equalToConstant: 26),
-            chatTab.widthAnchor.constraint(equalToConstant: 58),
+            avatarView.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 14),
+            avatarView.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            avatarView.widthAnchor.constraint(equalToConstant: 32),
+            avatarView.heightAnchor.constraint(equalToConstant: 32),
 
-            notesTab.leadingAnchor.constraint(equalTo: chatTab.trailingAnchor, constant: 4),
-            notesTab.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            notesTab.heightAnchor.constraint(equalToConstant: 26),
-            notesTab.widthAnchor.constraint(equalToConstant: 58),
+            nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 8),
+            nameLabel.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: chatTab.leadingAnchor, constant: -8),
 
-            settingsButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -10),
-            settingsButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            contextLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            contextLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 2),
+            contextLabel.trailingAnchor.constraint(lessThanOrEqualTo: libraryButton.leadingAnchor, constant: -8),
 
-            statusLabel.trailingAnchor.constraint(equalTo: settingsButton.leadingAnchor, constant: -6),
-            statusLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: notesTab.trailingAnchor, constant: 8),
+            libraryButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -12),
+            libraryButton.centerYAnchor.constraint(equalTo: contextLabel.centerYAnchor),
+
+            settingsButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -8),
+            settingsButton.topAnchor.constraint(equalTo: header.topAnchor, constant: 8),
+
+            notesTab.trailingAnchor.constraint(equalTo: settingsButton.leadingAnchor, constant: -2),
+            notesTab.centerYAnchor.constraint(equalTo: settingsButton.centerYAnchor),
+            notesTab.heightAnchor.constraint(equalToConstant: 24),
+            notesTab.widthAnchor.constraint(equalToConstant: 46),
+
+            chatTab.trailingAnchor.constraint(equalTo: notesTab.leadingAnchor, constant: -2),
+            chatTab.centerYAnchor.constraint(equalTo: settingsButton.centerYAnchor),
+            chatTab.heightAnchor.constraint(equalToConstant: 24),
+            chatTab.widthAnchor.constraint(equalToConstant: 46),
+
+            statusLabel.trailingAnchor.constraint(equalTo: chatTab.leadingAnchor, constant: -4),
+            statusLabel.centerYAnchor.constraint(equalTo: settingsButton.centerYAnchor),
+            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: 4),
         ])
 
         let line = SeparatorLine()
@@ -204,135 +239,47 @@ final class AssistantPane: NSView, NSTextViewDelegate {
         chatContainer.addSubview(transcript)
         transcript.onPage = { [weak self] page in self?.delegate?.assistantDidJumpToPage(page) }
 
-        anchorBar.wantsLayer = true
-        anchorBar.layer?.cornerRadius = 8
-        anchorBar.layer?.backgroundColor = Theme.accent.withAlphaComponent(0.12).cgColor
-        anchorBar.translatesAutoresizingMaskIntoConstraints = false
-        anchorBar.isHidden = true
-        anchorLabel.font = Theme.text(11)
-        anchorLabel.textColor = .secondaryLabelColor
-        anchorLabel.lineBreakMode = .byTruncatingTail
-        anchorLabel.translatesAutoresizingMaskIntoConstraints = false
-        let clearQuote = NSButton()
-        clearQuote.iconSetup("xmark.circle.fill", tip: "取消引用", target: self, action: #selector(clearQuoteTapped), size: 18)
-        clearQuote.contentTintColor = .tertiaryLabelColor
-        anchorBar.addSubview(anchorLabel)
-        anchorBar.addSubview(clearQuote)
-        NSLayoutConstraint.activate([
-            anchorBar.heightAnchor.constraint(equalToConstant: 28),
-            anchorLabel.leadingAnchor.constraint(equalTo: anchorBar.leadingAnchor, constant: 10),
-            anchorLabel.centerYAnchor.constraint(equalTo: anchorBar.centerYAnchor),
-            anchorLabel.trailingAnchor.constraint(lessThanOrEqualTo: clearQuote.leadingAnchor, constant: -4),
-            clearQuote.trailingAnchor.constraint(equalTo: anchorBar.trailingAnchor, constant: -5),
-            clearQuote.centerYAnchor.constraint(equalTo: anchorBar.centerYAnchor),
-        ])
-
-        chipsStack.orientation = .horizontal
-        chipsStack.spacing = 6
-        chipsStack.translatesAutoresizingMaskIntoConstraints = false
-        detailControl.segmentStyle = .rounded
-        detailControl.font = Theme.text(11, weight: .medium)
-        detailControl.selectedSegment = Prefs.shared.answerDetail == .detailed ? 1 : 0
-        detailControl.setToolTip("先给结论，大约 400 字", forSegment: 0)
-        detailControl.setToolTip("把推理、符号和证据边界写完整", forSegment: 1)
-        detailControl.target = self
-        detailControl.action = #selector(detailChanged)
-        detailControl.translatesAutoresizingMaskIntoConstraints = false
-        detailControl.setContentCompressionResistancePriority(.required, for: .horizontal)
-        for (title, question) in Self.quickAsks {
-            let pill = PillButton(title: title)
-            pill.target = self
-            pill.action = #selector(quickAskTapped(_:))
-            pill.identifier = NSUserInterfaceItemIdentifier(question)
-            chipsStack.addArrangedSubview(pill)
-        }
-
-        composerBox.wantsLayer = true
-        composerBox.layer?.cornerRadius = 12
-        composerBox.layer?.backgroundColor = Theme.cardBackground.cgColor
-        composerBox.layer?.borderWidth = 1
-        composerBox.layer?.borderColor = Theme.hairline.cgColor
-        composerBox.translatesAutoresizingMaskIntoConstraints = false
-
-        composer.font = Theme.text(13)
-        composer.isRichText = false
-        composer.allowsUndo = true
-        composer.drawsBackground = false
-        composer.textContainerInset = NSSize(width: 4, height: 6)
-        composer.isVerticallyResizable = true
-        composer.isHorizontallyResizable = false
-        composer.autoresizingMask = [.width]
-        composer.textContainer?.widthTracksTextView = true
-        composer.delegate = self
-        composer.onSubmit = { [weak self] in self?.submit() }
-
-        composerScroll.documentView = composer
-        composerScroll.hasVerticalScroller = true
-        composerScroll.drawsBackground = false
-        composerScroll.autohidesScrollers = true
-        composerScroll.scrollerStyle = .overlay
-        composerScroll.borderType = .noBorder
-        composerScroll.translatesAutoresizingMaskIntoConstraints = false
-
-        placeholder.font = Theme.text(13)
-        placeholder.textColor = .tertiaryLabelColor
-        placeholder.translatesAutoresizingMaskIntoConstraints = false
-
-        sendButton.isBordered = false
-        sendButton.bezelStyle = .inline
-        sendButton.image = NSImage(systemSymbolName: "arrow.up.circle.fill", accessibilityDescription: "发送")
-        sendButton.contentTintColor = Theme.accent
-        sendButton.imageScaling = .scaleProportionallyDown
-        sendButton.target = self
-        sendButton.action = #selector(sendTapped)
-        sendButton.translatesAutoresizingMaskIntoConstraints = false
-
-        composerBox.addSubview(placeholder)
-        composerBox.addSubview(composerScroll)
-        composerBox.addSubview(sendButton)
-
-        chatContainer.addSubview(anchorBar)
-        chatContainer.addSubview(chipsStack)
-        chatContainer.addSubview(detailControl)
-        chatContainer.addSubview(composerBox)
-
         NSLayoutConstraint.activate([
             transcript.leadingAnchor.constraint(equalTo: chatContainer.leadingAnchor),
             transcript.trailingAnchor.constraint(equalTo: chatContainer.trailingAnchor),
             transcript.topAnchor.constraint(equalTo: chatContainer.topAnchor),
-            transcript.bottomAnchor.constraint(equalTo: anchorBar.topAnchor, constant: -8),
-
-            anchorBar.leadingAnchor.constraint(equalTo: chatContainer.leadingAnchor, constant: 12),
-            anchorBar.trailingAnchor.constraint(equalTo: chatContainer.trailingAnchor, constant: -12),
-            anchorBar.bottomAnchor.constraint(equalTo: chipsStack.topAnchor, constant: -8),
-
-            chipsStack.leadingAnchor.constraint(equalTo: chatContainer.leadingAnchor, constant: 12),
-            chipsStack.trailingAnchor.constraint(lessThanOrEqualTo: detailControl.leadingAnchor, constant: -8),
-            chipsStack.bottomAnchor.constraint(equalTo: composerBox.topAnchor, constant: -8),
-            chipsStack.heightAnchor.constraint(equalToConstant: 26),
-
-            detailControl.trailingAnchor.constraint(equalTo: chatContainer.trailingAnchor, constant: -12),
-            detailControl.centerYAnchor.constraint(equalTo: chipsStack.centerYAnchor),
-            detailControl.widthAnchor.constraint(equalToConstant: 108),
-
-            composerBox.leadingAnchor.constraint(equalTo: chatContainer.leadingAnchor, constant: 12),
-            composerBox.trailingAnchor.constraint(equalTo: chatContainer.trailingAnchor, constant: -12),
-            composerBox.bottomAnchor.constraint(equalTo: chatContainer.bottomAnchor, constant: -12),
-            composerBox.heightAnchor.constraint(equalToConstant: 84),
-
-            placeholder.leadingAnchor.constraint(equalTo: composerBox.leadingAnchor, constant: 12),
-            placeholder.topAnchor.constraint(equalTo: composerBox.topAnchor, constant: 9),
-
-            composerScroll.leadingAnchor.constraint(equalTo: composerBox.leadingAnchor, constant: 8),
-            composerScroll.trailingAnchor.constraint(equalTo: composerBox.trailingAnchor, constant: -40),
-            composerScroll.topAnchor.constraint(equalTo: composerBox.topAnchor, constant: 4),
-            composerScroll.bottomAnchor.constraint(equalTo: composerBox.bottomAnchor, constant: -4),
-
-            sendButton.trailingAnchor.constraint(equalTo: composerBox.trailingAnchor, constant: -8),
-            sendButton.bottomAnchor.constraint(equalTo: composerBox.bottomAnchor, constant: -8),
-            sendButton.widthAnchor.constraint(equalToConstant: 26),
-            sendButton.heightAnchor.constraint(equalToConstant: 26),
+            transcript.bottomAnchor.constraint(equalTo: chatContainer.bottomAnchor),
         ])
+    }
+
+    func setChatHeading(paper: String?) {
+        contextLabel.stringValue = (paper?.isEmpty == false) ? paper! : "还没打开论文，先随便聊聊"
+    }
+
+    @objc private func showRoster() {
+        let menu = NSMenu()
+        let lounge = NSMenuItem(title: "随便聊聊", action: #selector(pickLounge), keyEquivalent: "")
+        lounge.target = self
+        menu.addItem(lounge)
+        menu.addItem(.separator())
+        let papers = ShelfStore.loadMerged().papers.sorted {
+            ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast)
+        }
+        if papers.isEmpty {
+            let empty = NSMenuItem(title: "书库还是空的", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+        }
+        for paper in papers.prefix(16) {
+            let item = NSMenuItem(title: paper.title, action: #selector(pickPaper(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = paper.path
+            item.toolTip = paper.path
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: libraryButton.bounds.height), in: libraryButton)
+    }
+
+    @objc private func pickLounge() { onLounge?() }
+
+    @objc private func pickPaper(_ sender: NSMenuItem) {
+        guard let path = sender.representedObject as? String else { return }
+        onPickPaper?(URL(fileURLWithPath: path))
     }
 
     private func buildNotes() {
@@ -391,15 +338,13 @@ final class AssistantPane: NSView, NSTextViewDelegate {
         streamStart = -1
         streamBuffer = ""
         self.doc = doc
+        setChatHeading(paper: doc?.title)
         threads = []
         highlights = []
         studyNotes = nil
-        pendingQuote = nil
-        updateAnchorBar()
         renderChat()
         renderNotes()
         statusLabel.stringValue = ""
-        updatePlaceholder()
     }
 
     func setThreads(_ threads: [AskThread]) {
@@ -436,14 +381,6 @@ final class AssistantPane: NSView, NSTextViewDelegate {
 
     func setStatus(_ text: String) { statusLabel.stringValue = text }
 
-    func focusComposer(with quote: String?, page: Int?) {
-        pendingQuote = quote
-        updateAnchorBar()
-        selectTab(0)
-        window?.makeFirstResponder(composer)
-        _ = page
-    }
-
     func selectTab(_ index: Int) {
         selectedTab = index
         updateTabAppearance()
@@ -463,12 +400,11 @@ final class AssistantPane: NSView, NSTextViewDelegate {
 
     func beginAnswer(page: Int?, question: String = "") {
         pendingQuestion = question
-        pendingPage = page ?? currentPage
+        pendingPage = page ?? -1
         streamStart = 0
         streamBuffer = ""
         failedStream = false
         isStreaming = true
-        updateSendState()
         renderChat()
     }
     func appendAnswer(_ delta: String) {
@@ -481,7 +417,6 @@ final class AssistantPane: NSView, NSTextViewDelegate {
         streamTimer?.invalidate(); streamTimer = nil
         isStreaming = false
         streamBuffer = markdown
-        updateSendState()
         renderChat()
     }
     func failAnswer(_ message: String) {
@@ -490,7 +425,6 @@ final class AssistantPane: NSView, NSTextViewDelegate {
         streamStart = 0
         streamBuffer = message
         failedStream = true
-        updateSendState()
         renderChat()
     }
     func snapshotChat(to url: URL, completion: @escaping () -> Void) { transcript.snapshot(to: url, completion: completion) }
@@ -574,73 +508,11 @@ final class AssistantPane: NSView, NSTextViewDelegate {
 
     @objc private func tabTapped(_ sender: NSButton) { selectTab(sender.tag) }
 
-    func debugSelectDetail(detailed: Bool) {
-        detailControl.selectedSegment = detailed ? 1 : 0
-        Prefs.shared.answerDetail = detailed ? .detailed : .concise
-    }
-
-    @objc private func detailChanged() {
-        Prefs.shared.answerDetail = detailControl.selectedSegment == 1 ? .detailed : .concise
-    }
-
-    @objc private func sendTapped() {
-        if isStreaming { delegate?.assistantDidStop() } else { submit() }
-    }
-
-    private func submit() {
-        let text = composer.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isStreaming else { return }
-        composer.string = ""
-        updatePlaceholder()
-        delegate?.assistantDidSubmit(text)
-    }
-
-    @objc private func quickAskTapped(_ sender: PillButton) {
-        guard !isStreaming, let question = sender.identifier?.rawValue else { return }
-        delegate?.assistantDidTapQuickAsk(question)
-    }
-
     @objc private func reportTapped() { delegate?.assistantDidRequestReport() }
     @objc private func levelTapped() { delegate?.assistantDidRequestReadingLevel() }
     @objc private func studyTapped() { delegate?.assistantDidRequestStudyNotes() }
 
-    @objc private func clearQuoteTapped() {
-        pendingQuote = nil
-        updateAnchorBar()
-        delegate?.assistantDidClearQuote()
-    }
-
     @objc private func settingsTapped() { delegate?.assistantDidRequestSettings() }
-
-    // MARK: - Helpers
-
-    private func updateAnchorBar() {
-        if let quote = pendingQuote, !quote.isEmpty {
-            let flat = quote.replacingOccurrences(of: "\n", with: " ")
-            let prefix = flat.count > 30 ? String(flat.prefix(30)) + "…" : flat
-            anchorLabel.stringValue = "❝ 引用 · \(prefix)"
-            anchorBar.isHidden = false
-        } else {
-            anchorBar.isHidden = true
-        }
-    }
-
-    private func updatePlaceholder() {
-        placeholder.isHidden = !composer.string.isEmpty
-    }
-
-    private func updateSendState() {
-        sendButton.image = NSImage(systemSymbolName: isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill",
-                                   accessibilityDescription: isStreaming ? "停止" : "发送")
-        sendButton.contentTintColor = isStreaming ? .systemRed : Theme.accent
-        chipsStack.isHidden = isStreaming
-    }
-
-    func textDidChange(_ notification: Notification) {
-        if let view = notification.object as? NSTextView, view === composer {
-            updatePlaceholder()
-        }
-    }
 
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         guard let string = link as? String, string.hasPrefix("page://"),
@@ -649,11 +521,4 @@ final class AssistantPane: NSView, NSTextViewDelegate {
         return true
     }
 
-    private static func timeString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
-    }
-
-    var pendingQuoteValue: String? { pendingQuote }
 }

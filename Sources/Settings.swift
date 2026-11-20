@@ -65,10 +65,11 @@ final class Prefs {
         static let sidebarVisible = "sidebarVisible"
         static let navigatorVisible = "navigatorVisible"
         static let answerDetail = "answerDetail"
+        static let reasoningEffort = "reasoningEffort"
     }
 
     var model: String {
-        get { defaults.string(forKey: Key.model) ?? "deepseek-chat" }
+        get { defaults.string(forKey: Key.model) ?? "deepseek-flash" }
         set { defaults.set(newValue, forKey: Key.model) }
     }
 
@@ -139,6 +140,11 @@ final class Prefs {
     var answerDetail: AnswerDetail {
         get { AnswerDetail(rawValue: defaults.string(forKey: Key.answerDetail) ?? "") ?? .concise }
         set { defaults.set(newValue.rawValue, forKey: Key.answerDetail) }
+    }
+
+    var reasoningEffort: ReasoningEffort {
+        get { ReasoningEffort(rawValue: defaults.string(forKey: Key.reasoningEffort) ?? "") ?? .high }
+        set { defaults.set(newValue.rawValue, forKey: Key.reasoningEffort) }
     }
 
     var lastDocPath: String? {

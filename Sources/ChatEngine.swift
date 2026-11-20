@@ -97,6 +97,7 @@ final class ChatEngine {
                       baseURL: Prefs.shared.baseURL,
                       model: Prefs.shared.model,
                       messages: messages,
+                      reasoning: Prefs.shared.reasoningEffort,
                       onDelta: onDelta,
                       onFinish: { [weak self] result in
                           Debug.log("engine onFinish main=\(Thread.isMainThread)")
@@ -199,7 +200,26 @@ final class ChatEngine {
 
     // MARK: - Prompt construction
 
+    static let loungePath = "papercompanion:lounge"
+
+    static func loungeDocument() -> PaperDoc {
+        PaperDoc(path: loungePath, title: "随便聊聊", pages: [], language: .chinese,
+                 needsOCR: false, truncated: false, fullText: "", charCount: 0, captions: [:])
+    }
+
     static func systemPrompt(doc: PaperDoc, detail: AnswerDetail = .concise) -> String {
+        if doc.path == loungePath {
+            return """
+            你是「论文伴侣」，陪用户在翻开论文之前、合上论文之后随便聊。
+
+            行为准则：
+            1. 用简体中文，先给结论，再给依据。可以聊怎么读论文、研究问题、概念和方法。
+            2. 现在没有打开具体论文时，不要编造某篇论文的页码、数字、图表或结论。
+            3. 用户要求打开书库里的论文时，应用会打开它。不要说自己无法打开本地文件。若你判断该打开某一篇，单独写一行 [[open:关键词]]。
+            4. 用户若附了图片，结合图片回答，并说明图里看得到和看不出的部分。
+            \(detail.instruction)
+            """
+        }
         var prompt = """
         你是「论文伴侣」，一位严谨、直接的科研阅读助手，正陪用户精读一篇论文。
 
@@ -211,6 +231,7 @@ final class ChatEngine {
         5. 解释图表：先说它展示了什么变量/对比，再给关键数值，最后说它能支持与不能支持的结论。
         6. 区分"论文声称的"和"证据支持的"；可疑处直说。
         7. 用户若附了图片（框选的图/表/公式区域），以图片为主要依据，OCR 文本可能有误。
+        8. 用户要换一篇或打开书库里的另一篇时，单独写一行 [[open:关键词]]。应用会打开文件。不要说自己无法打开本地文件。
         \(detail.instruction)
         """
 
@@ -254,7 +275,7 @@ final class ChatEngine {
                 blocks.append("该页原文：\n\(String(doc.text(at: page).prefix(3000)))")
             }
         case .general:
-            break
+            if context.imageJPEG != nil { blocks.append("（用户附加了一张图片，请结合图片回答）") }
         }
 
         blocks.append("问题：" + question)

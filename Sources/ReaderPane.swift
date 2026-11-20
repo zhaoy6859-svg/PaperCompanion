@@ -215,6 +215,7 @@ final class HighlightOverlay: NSView {
 
 final class ReaderPane: NSView {
     let pdfView = PDFView()
+    let askDock = AskDock()
     private let navigator = ReadingNavigator()
     private var navigatorWidth: NSLayoutConstraint!
     private let findBar = PaperFindBar()
@@ -364,6 +365,8 @@ final class ReaderPane: NSView {
         navigatorWidth = navigator.widthAnchor.constraint(equalToConstant: 0)
         findBarHeight = findBar.heightAnchor.constraint(equalToConstant: 0)
         findBarTop = findBar.topAnchor.constraint(equalTo: translationColumn.bottomAnchor)
+        askDock.frame = NSRect(x: 0, y: 0, width: 800, height: 118)
+        addSubview(askDock)
         let findWidth = findBar.widthAnchor.constraint(equalToConstant: 420)
         findWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
@@ -381,7 +384,12 @@ final class ReaderPane: NSView {
             pdfView.leadingAnchor.constraint(equalTo: navigator.trailingAnchor),
             pdfView.trailingAnchor.constraint(equalTo: trailingAnchor),
             pdfView.topAnchor.constraint(equalTo: findBar.bottomAnchor),
-            pdfView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: askDock.topAnchor),
+
+            askDock.leadingAnchor.constraint(equalTo: navigator.trailingAnchor),
+            askDock.trailingAnchor.constraint(equalTo: trailingAnchor),
+            askDock.bottomAnchor.constraint(equalTo: bottomAnchor),
+            emptyView.bottomAnchor.constraint(equalTo: askDock.topAnchor),
 
             translationDivider.widthAnchor.constraint(equalToConstant: 1),
             translationDivider.topAnchor.constraint(equalTo: topAnchor),
@@ -444,7 +452,6 @@ final class ReaderPane: NSView {
             emptyView.leadingAnchor.constraint(equalTo: leadingAnchor),
             emptyView.trailingAnchor.constraint(equalTo: trailingAnchor),
             emptyView.topAnchor.constraint(equalTo: topAnchor),
-            emptyView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         readingProgress.translatesAutoresizingMaskIntoConstraints = false
         readingProgress.isHidden = true
@@ -453,7 +460,7 @@ final class ReaderPane: NSView {
             readingProgress.widthAnchor.constraint(equalToConstant: 366),
             readingProgress.heightAnchor.constraint(equalToConstant: 104),
             readingProgress.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
-            readingProgress.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -20),
+            readingProgress.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -150),
         ])
     }
 
@@ -470,6 +477,7 @@ final class ReaderPane: NSView {
         pdfView.document = document
         emptyView.isHidden = !empty
         pdfView.isHidden = empty
+        askDock.setMode(paper: !empty)
         if empty { emptyView.reload() } else { emptyView.suspendShortcut() }
         toolbar.isHidden = true
         navigator.reload()

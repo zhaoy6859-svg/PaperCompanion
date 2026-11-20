@@ -51,6 +51,7 @@ final class LLMClient {
                 model: String,
                 messages: [[String: Any]],
                 temperature: Double = 0.25,
+                reasoning: ReasoningEffort? = nil,
                 maxTokens: Int? = nil,
                 timeout: TimeInterval = 180,
                 onDelta: @escaping (String) -> Void,
@@ -81,6 +82,15 @@ final class LLMClient {
         ]
         if model.contains("reasoner") {
             body.removeValue(forKey: "temperature")
+        }
+        if let reasoning, let value = reasoning.wireValue(providerID: Prefs.shared.providerID) {
+            body["reasoning_effort"] = value
+            if Prefs.shared.providerID == "deepseek", reasoning == .none {
+                body["thinking"] = ["type": "disabled"]
+            }
+            if Prefs.shared.providerID == "deepseek", reasoning != .none {
+                body.removeValue(forKey: "temperature")
+            }
         }
         if let maxTokens {
             body["max_tokens"] = maxTokens

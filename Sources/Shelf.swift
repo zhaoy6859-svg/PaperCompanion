@@ -249,6 +249,87 @@ enum ShelfStore {
         }
     }
 
+    /// Pick a shelf paper the user asked to open. Nil when the request is not an open, or the match is ambiguous.
+    static func paperToOpen(_ question: String, in papers: [ShelfPaper]) -> ShelfPaper? {
+        let lowered = question.localizedLowercase
+        guard ["打开", "开一下", "开启", "open"].contains(where: { lowered.contains($0) }) else { return nil }
+        var query = lowered
+        for word in ["请你", "请", "帮我", "帮忙", "一下", "哪篇", "那篇", "这篇", "文献", "论文", "文件", "打开", "开启", "看看", "找到", "open"] {
+            query = query.replacingOccurrences(of: word, with: " ")
+        }
+        let terms = query.split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count >= 2 }
+        guard !terms.isEmpty else { return nil }
+        return best(terms.joined(separator: " "), in: papers)
+    }
+
+    static func best(_ query: String, in papers: [ShelfPaper]) -> ShelfPaper? {
+        let q = query.localizedLowercase.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { return nil }
+        let ranked = papers.compactMap { paper -> (ShelfPaper, Int)? in
+            let score = matchScore(q, paper)
+            return score > 0 ? (paper, score) : nil
+        }.sorted { $0.1 > $1.1 }
+        guard let top = ranked.first, top.1 >= 60 else { return nil }
+        if ranked.count > 1, ranked[1].1 >= top.1 - 5 { return nil }
+        return top.0
+    }
+
+    static func catalog(of papers: [ShelfPaper], limit: Int = 40) -> String {
+        let ordered = papers.sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
+        if ordered.isEmpty { return "（书库是空的）" }
+        return ordered.prefix(limit).map { "· \($0.title)" }.joined(separator: "\n")
+    }
+
+    /// Pull `[[open:关键词]]` out of a model reply so the app can open the paper and the chat stays clean.
+    static func consumeOpens(_ text: String) -> (text: String, queries: [String]) {
+        let pattern = #"\[\[open:([^\]]{1,80})\]\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return (text, []) }
+        let range = NSRange(text.startIndex..., in: text)
+        var queries: [String] = []
+        regex.enumerateMatches(in: text, range: range) { match, _, _ in
+            guard let match, match.numberOfRanges > 1, let span = Range(match.range(at: 1), in: text) else { return }
+            queries.append(String(text[span]))
+        }
+        let clean = regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+        return (clean.replacingOccurrences(of: "\n\n\n", with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines), queries)
+    }
+
+    private static func matchScore(_ query: String, _ paper: ShelfPaper) -> Int {
+        let title = paper.title.localizedLowercase
+        let file = paper.filename.localizedLowercase
+        let excerpt = paper.excerpt.localizedLowercase
+        if title.contains(query) || file.contains(query) { return 100 }
+        let acronym = initials(of: paper.title)
+        if acronym == query || acronym.contains(query) { return 90 }
+        if query.count >= 3, acronym.count - query.count <= 2, isSubsequence(query, of: acronym) { return 70 }
+        if excerpt.contains(query) { return 60 }
+        let tokens = query.split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count >= 2 }
+        if tokens.count > 1 {
+            let hay = title + "\n" + file + "\n" + excerpt
+            let hits = tokens.filter { hay.contains($0) }.count
+            if hits == tokens.count { return 80 }
+        }
+        return 0
+    }
+
+    private static func initials(of title: String) -> String {
+        let skip: Set<String> = ["a", "an", "the", "of", "for", "and", "with", "on", "in", "to", "from", "by"]
+        return title.split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { !skip.contains($0.localizedLowercase) && $0.count > 1 }
+            .compactMap { $0.first.map { String($0).localizedLowercase } }
+            .joined()
+    }
+
+    private static func isSubsequence(_ needle: String, of hay: String) -> Bool {
+        var index = hay.startIndex
+        for character in needle {
+            guard let found = hay[index...].firstIndex(of: character) else { return false }
+            index = hay.index(after: found)
+        }
+        return !needle.isEmpty
+    }
+
     static func excerpt(from state: DocState) -> String {
         var parts: [String] = [state.doc.title]
         if let first = state.doc.pages.first?.text, !first.isEmpty {

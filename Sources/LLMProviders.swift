@@ -12,12 +12,37 @@ struct LLMProvider: Identifiable, Equatable {
     let isLocal: Bool
 }
 
+/// How hard the model should think before answering. DeepSeek accepts
+/// none / low / high / max. Other OpenAI-compatible services get the closest
+/// value they usually accept; max is sent as high.
+enum ReasoningEffort: String, CaseIterable {
+    case none, low, high, max
+
+    var title: String {
+        switch self {
+        case .none: return "关闭"
+        case .low: return "低"
+        case .high: return "高"
+        case .max: return "最强"
+        }
+    }
+
+    func wireValue(providerID: String) -> String? {
+        if providerID == "deepseek" { return rawValue }
+        switch self {
+        case .none: return nil
+        case .low: return "low"
+        case .high, .max: return "high"
+        }
+    }
+}
+
 enum LLMProviders {
     static let all: [LLMProvider] = [
         LLMProvider(id: "deepseek",
                     name: "DeepSeek（推荐）",
                     baseURL: "https://api.deepseek.com",
-                    models: ["deepseek-chat", "deepseek-reasoner"],
+                    models: ["deepseek-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
                     keyHint: "platform.deepseek.com 的 sk- key",
                     supportsVision: true,
                     isLocal: false),

@@ -33,6 +33,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     private var sidebarVisible = true
 
     private var state: DocState?
+    private var lounge = LoungeRecord()
+    private var attachedJPEG: Data?
+    private var carryQuestion: String?
     private var pdfDocument: PDFDocument?
     private let engine = ChatEngine()
     private let reportEngine = ChatEngine()
@@ -78,7 +81,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
             open(url: startup)
         } else {
             reader.show(document: nil, empty: true)
-            showSidebar(false, animated: false)
+            presentLounge()
+            showSidebar(true, animated: false)
             setReadingChrome(visible: false)
             updateHeaderAvailability()
         }
@@ -103,9 +107,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         root.addSubview(header)
         root.addSubview(footer)
         root.addSubview(reader)
+        assistantHost.wantsLayer = true
+        assistantHost.layer?.backgroundColor = Theme.paperBackground.cgColor
         assistantHost.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(assistantHost)
-        assistantWidth = assistantHost.widthAnchor.constraint(equalToConstant: 410)
+        assistantWidth = assistantHost.widthAnchor.constraint(equalToConstant: 468)
         NSLayoutConstraint.activate([
             header.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             header.trailingAnchor.constraint(equalTo: root.trailingAnchor),
@@ -127,11 +133,16 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
             assistantHost.topAnchor.constraint(equalTo: reader.topAnchor),
             assistantHost.bottomAnchor.constraint(equalTo: reader.bottomAnchor),
             assistantWidth,
-            assistant.leadingAnchor.constraint(equalTo: assistantHost.leadingAnchor),
-            assistant.trailingAnchor.constraint(equalTo: assistantHost.trailingAnchor),
-            assistant.topAnchor.constraint(equalTo: assistantHost.topAnchor),
-            assistant.bottomAnchor.constraint(equalTo: assistantHost.bottomAnchor),
         ])
+        for inset in [
+            assistant.leadingAnchor.constraint(equalTo: assistantHost.leadingAnchor, constant: 8),
+            assistant.trailingAnchor.constraint(equalTo: assistantHost.trailingAnchor, constant: -10),
+            assistant.topAnchor.constraint(equalTo: assistantHost.topAnchor, constant: 8),
+            assistant.bottomAnchor.constraint(equalTo: assistantHost.bottomAnchor, constant: -10),
+        ] {
+            inset.priority = .defaultHigh
+            inset.isActive = true
+        }
         Debug.log("ui: assistant")
         Debug.log("ui: wire")
         assistant.delegate = self
@@ -346,6 +357,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         reader.onImportFolder = { [weak self] in self?.importFolderPanel() }
         reader.onImportZotero = { [weak self] in self?.importZotero() }
         reader.onRelocatePaper = { [weak self] url in self?.relocatePaper(url) }
+        reader.askDock.onSubmit = { [weak self] text in self?.assistantDidSubmit(text) }
+        reader.askDock.onQuickAsk = { [weak self] question in self?.assistantDidTapQuickAsk(question) }
+        reader.askDock.onStop = { [weak self] in self?.assistantDidStop() }
+        reader.askDock.onClearQuote = { [weak self] in self?.anchor = nil }
+        reader.askDock.onOpenSettings = { [weak self] in self?.onOpenSettings?() }
+        reader.askDock.onAttach = { [weak self] in self?.attachFromComposer() }
+        reader.askDock.onClearAttachment = { [weak self] in self?.attachedJPEG = nil }
+        assistant.onPickPaper = { [weak self] url in self?.open(url: url) }
+        assistant.onLounge = { [weak self] in self?.showLibrary() }
         reader.onNavigatorChanged = { [weak self] on in
             self?.navigatorOn = on
             self?.refreshNavigatorButton()
@@ -405,6 +425,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
                 guard let self else { return }
                 self.isLoading = false
                 guard let doc else {
+                    self.carryQuestion = nil
                     self.statusLabel.stringValue = "读不了这个文件"
                     let alert = NSAlert()
                     alert.messageText = "打不开这篇论文"
@@ -446,6 +467,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         reader.configureTranslations(doc: doc, translations: newState.translations, currentPage: 0)
 
         showSidebar(true, animated: false)
+        reader.askDock.clearQuote()
+        reader.askDock.setAttachment(nil)
+        attachedJPEG = nil
+        reader.askDock.setStreaming(false)
+        reader.askDock.setConversationCount(newState.threads.count)
+        reader.askDock.refreshModelChip()
 
         var pageIndex = ShelfStore.lastPage(for: doc.path)
         if pageIndex == 0, Prefs.shared.lastDocPath == doc.path, Prefs.shared.lastPage > 0 {
@@ -481,6 +508,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
             reader.updateTranslationProgress((newState.translations.count, newState.translations.count))
         }
         if newState.readingLevel == nil { assistantDidRequestReadingLevel() }
+        if let question = carryQuestion {
+            carryQuestion = nil
+            submit(question: question, page: 0, carried: true)
+        }
     }
 
     // MARK: - Sidebar
@@ -488,7 +519,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     private func showSidebar(_ visible: Bool, animated: Bool = true) {
         sidebarVisible = visible
         assistantHost.isHidden = !visible
-        assistantWidth.constant = visible ? min(410, (window?.frame.width ?? 1200) * 0.35) : 0
+        assistantWidth.constant = visible ? min(468, (window?.frame.width ?? 1200) * 0.38) : 0
         window?.contentView?.layoutSubtreeIfNeeded()
         reader.refitIfNeeded()
         sidebarButton.toolTip = visible ? "收起右侧助手 (⇧⌘S)" : "展开右侧助手 (⇧⌘S)"
@@ -563,7 +594,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         pdfDocument = nil
         reader.show(document: nil, empty: true)
         setReadingChrome(visible: false)
-        showSidebar(false, animated: false)
+        presentLounge()
+        showSidebar(true, animated: false)
         updateHeaderAvailability()
         updateCompareButton(false)
         compareButton.isHidden = false
@@ -686,7 +718,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         case .ask:
             let id = addHighlight(page: page, rects: rects, quote: text, threadID: nil, color: .yellow, style: .text)
             anchor = AskContext(kind: .selection, page: page, quote: text, rects: rects, highlightID: id)
-            assistant.focusComposer(with: text, page: page)
+            showSidebar(true)
+            assistant.selectTab(0)
+            reader.askDock.focus(quote: text)
         case .explain:
             let id = addHighlight(page: page, rects: rects, quote: text, threadID: nil, color: .yellow, style: .text)
             anchor = AskContext(kind: .selection, page: page, quote: text, rects: rects, highlightID: id)
@@ -734,7 +768,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
                                          caption: caption, ocr: ocr,
                                          imageJPEG: Prefs.shared.usesVision ? jpeg : nil, rects: [rect],
                                          highlightID: highlightID)
-                self.assistant.focusComposer(with: "[框选 p.\(pageIndex + 1)] 图片已附上", page: pageIndex)
+                self.showSidebar(true)
+                self.assistant.selectTab(0)
+                self.reader.askDock.focus(quote: "[框选 p.\(pageIndex + 1)] 图片已附上")
                 self.submit(question: "解释我框选的这部分（可能是图、表或公式）：它在展示什么，关键信息是什么？", page: pageIndex)
             }
         }
@@ -742,8 +778,55 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
 
     // MARK: - Asking
 
-    private func submit(question: String, page: Int?) {
-        guard let state else { return }
+    private func presentLounge() {
+        lounge = LoungeStore.load()
+        assistant.setDocument(nil)
+        assistant.setThreads(lounge.threads)
+        reader.askDock.setStreaming(false)
+        reader.askDock.clearQuote()
+        reader.askDock.setAttachment(nil)
+        reader.askDock.refreshModelChip()
+        attachedJPEG = nil
+        anchor = nil
+    }
+
+    private func attachFromComposer() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.image, .pdf]
+        panel.message = "图片会附在下一条消息上。选 PDF 则会打开那篇论文。"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if url.pathExtension.lowercased() == "pdf" {
+            open(url: url)
+            return
+        }
+        guard let image = NSImage(contentsOf: url), let jpeg = RegionCapture.jpegData(from: image) else {
+            statusLabel.stringValue = "这张图片读不了"
+            return
+        }
+        attachedJPEG = jpeg
+        reader.askDock.setAttachment(url.deletingPathExtension().lastPathComponent)
+        showSidebar(true)
+        assistant.selectTab(0)
+        reader.askDock.focusComposer()
+    }
+
+    private func submit(question: String, page: Int?, carried: Bool = false) {
+        if !carried, let paper = ShelfStore.paperToOpen(question, in: ShelfStore.loadMerged().papers) {
+            if state?.doc.path == paper.path {
+                submit(question: question, page: page, carried: true)
+            } else {
+                carryQuestion = question
+                statusLabel.stringValue = "正在打开 " + paper.title
+                open(url: URL(fileURLWithPath: paper.path))
+            }
+            return
+        }
+        let loungeMode = state == nil
+        let boundPath = state?.doc.path
+        showSidebar(true)
+        assistant.selectTab(0)
         guard Prefs.shared.hasAPIKey else {
             assistant.failAnswer("还没有填 API Key：点右上角 ⚙︎ 设置，粘贴 DeepSeek 的 sk- key。")
             onOpenSettings?()
@@ -751,34 +834,82 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         }
 
         guard !engine.isStreaming else { return }
-        let context = anchor ?? AskContext(kind: .general, page: page)
-        let history = state.threads
+        var context = anchor ?? AskContext(kind: .general, page: loungeMode ? nil : page)
+        if let jpeg = attachedJPEG {
+            context.imageJPEG = jpeg
+            if context.quote == nil { context.quote = "附件图片" }
+        }
+        let doc = state?.doc ?? ChatEngine.loungeDocument()
+        let history = loungeMode ? lounge.threads : (state?.threads ?? [])
+        let level = state?.readingLevel ?? .intermediate
+        let memory = loungeMode ? lounge.conversationMemory : state?.conversationMemory
 
-        assistant.beginAnswer(page: page, question: question)
-        statusLabel.stringValue = ConversationContext.recentStart(history) > (state.conversationMemory?.coveredCount ?? 0) ? "正在整理早期交流，随后回答…" : "回答中…"
+        let catalog = ShelfStore.catalog(of: ShelfStore.loadMerged().papers)
+        var modelQuestion = question
+        if carried {
+            modelQuestion = "【应用已经打开左侧这篇论文。先用一句话确认已经打开，再回答用户。不要说无法打开本地文件。】\n" + question
+        }
+        modelQuestion += "\n\n【书库标题，仅供决定要不要打开】\n" + catalog
+        assistant.beginAnswer(page: loungeMode ? nil : page, question: question)
+        reader.askDock.setStreaming(true)
+        statusLabel.stringValue = ConversationContext.recentStart(history) > (memory?.coveredCount ?? 0) ? "正在整理早期交流，随后回答…" : "回答中…"
 
-        engine.ask(doc: state.doc, history: history, level: state.readingLevel ?? .beginner,
+        engine.ask(doc: doc, history: history, level: level,
                    detail: Prefs.shared.answerDetail,
-                   memory: state.conversationMemory, onMemory: { [weak self] memory in
-            guard let self, var current = self.state, current.doc.path == state.doc.path else { return }
-            current.conversationMemory = memory
-            self.state = current
-            Store.save(current)
-        }, question: question, context: context) { [weak self] delta in
+                   memory: memory, onMemory: { [weak self] memory in
+            guard let self else { return }
+            if loungeMode {
+                guard self.state == nil else { return }
+                self.lounge.conversationMemory = memory
+                LoungeStore.save(self.lounge)
+            } else if var current = self.state, current.doc.path == boundPath {
+                current.conversationMemory = memory
+                self.state = current
+                Store.save(current)
+            }
+        }, question: modelQuestion, context: context) { [weak self] delta in
             self?.assistant.appendAnswer(delta)
         } onFinish: { [weak self] result in
             guard let self else { return }
+            let stillHere = loungeMode ? self.state == nil : self.state?.doc.path == boundPath
             self.statusLabel.stringValue = ""
+            self.reader.askDock.setStreaming(false)
+            self.reader.askDock.clearQuote()
+            self.reader.askDock.setAttachment(nil)
+            self.attachedJPEG = nil
+            guard stillHere else { return }
             switch result {
             case let .success(answer):
-                self.assistant.finishAnswer(markdown: answer)
-                self.recordThread(question: question, answer: answer, context: context)
+                let parsed = ShelfStore.consumeOpens(answer)
+                let shown = parsed.text.isEmpty ? "已经按你的要求处理。" : parsed.text
+                self.assistant.finishAnswer(markdown: shown)
+                if loungeMode {
+                    self.recordLounge(question: question, answer: shown, context: context)
+                } else {
+                    self.recordThread(question: question, answer: shown, context: context)
+                }
+                if let query = parsed.queries.first,
+                   let paper = ShelfStore.best(query, in: ShelfStore.loadMerged().papers),
+                   paper.path != self.state?.doc.path {
+                    self.open(url: URL(fileURLWithPath: paper.path))
+                }
             case let .failure(error):
                 let message = (error as? LLMError)?.localizedDescription ?? error.localizedDescription
                 self.assistant.failAnswer(message)
             }
             self.anchor = nil
         }
+    }
+
+    private func recordLounge(question: String, answer: String, context: AskContext) {
+        var thread = AskThread(kind: context.kind, page: -1, quote: context.quote, question: question, answer: answer)
+        if let image = context.imageJPEG,
+           let name = Store.saveImage(image, for: URL(fileURLWithPath: ChatEngine.loungePath), suffix: "jpg") {
+            thread.imageFile = name
+        }
+        lounge.threads.append(thread)
+        LoungeStore.save(lounge)
+        assistant.setThreads(lounge.threads)
     }
 
     private func recordThread(question: String, answer: String, context: AskContext) {
@@ -801,6 +932,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
         Store.save(state)
         self.state = state
         assistant.setThreads(state.threads)
+        reader.askDock.setConversationCount(state.threads.count)
         assistant.setHighlights(state.highlights)
         reader.applyHighlights(state.highlights)
     }
@@ -983,6 +1115,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
 
     func assistantDidStop() {
         engine.cancel()
+        reader.askDock.setStreaming(false)
         assistant.finishAnswer(markdown: studyBuffer.isEmpty ? "（已停止）" : studyBuffer)
     }
 
@@ -1051,6 +1184,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     }
 
     func settingsDidChange() {
+        reader.askDock.refreshModelChip()
         if var current = state, current.translationTarget != Prefs.shared.translationCacheKey {
             translator.cancel()
             selectTranslationCache(&current)
@@ -1070,13 +1204,19 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     func debugEndFind() { reader.endFind() }
     func debugShowThumbnails() { reader.showThumbnailNavigator() }
     func debugSetLibrarySearch(_ text: String) { reader.debugSetLibrarySearch(text) }
-    func debugSelectDetail(detailed: Bool) { assistant.debugSelectDetail(detailed: detailed) }
+    func debugSelectDetail(detailed: Bool) { reader.askDock.debugSelectDetail(detailed: detailed) }
+    func debugSetSidebar(visible: Bool) { showSidebar(visible, animated: false) }
+    func debugFocusComposer() {
+        window?.makeKeyAndOrderFront(nil)
+        reader.askDock.focusComposer()
+    }
 
     /// Fixed frame for README recordings. Drops the user's saved window frame first.
     func prepareShowcaseFrame() {
         window?.setFrameAutosaveName("PaperCompanion.Showcase")
         window?.setFrame(NSRect(x: 48, y: 64, width: 1120, height: 720), display: true, animate: false)
         window?.layoutIfNeeded()
+        reader.refitIfNeeded()
     }
 
     func toggleRegionFromMenu() { toggleRegion() }
@@ -1115,7 +1255,16 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
 
     func snapshot(to path: String) {
         let args = CommandLine.arguments
-        if args.contains("--frames"), let window, window.windowNumber > 0 {
+        if args.contains("--focus-composer") {
+            prepareShowcaseFrame()
+            NSApp.activate(ignoringOtherApps: true)
+            window?.displayIfNeeded()
+            let focused = reader.askDock.focusComposer()
+            Debug.log("composer focused=\(focused) responder=\(String(describing: type(of: window?.firstResponder)))")
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            window?.display()
+        }
+        if (args.contains("--frames") || args.contains("--focus-composer")), let window, window.windowNumber > 0 {
             let capture = Process()
             capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
             capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), path]

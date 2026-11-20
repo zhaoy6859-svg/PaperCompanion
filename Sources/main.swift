@@ -52,6 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func handleAutomationFlags() {
         let arguments = CommandLine.arguments
+        if arguments.contains("--focus-composer") {
+            UserDefaults.standard.set(8000, forKey: "NSTextInsertionPointBlinkPeriodOn")
+            UserDefaults.standard.set(200, forKey: "NSTextInsertionPointBlinkPeriodOff")
+        }
         if arguments.contains("--frames") {
             runFrameCapture()
             return
@@ -134,6 +138,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
            let custom = Double(arguments[delayIndex + 1]) {
             delay = custom
         }
+        if arguments.contains("--focus-composer") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.3, delay - 0.35)) { [self] in
+                mainWindow.debugFocusComposer()
+            }
+        }
         Debug.log("snapshot scheduled in \(delay)s -> \(path)")
         if arguments.contains("--settings") {
             showSettings()
@@ -180,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch scene {
         case "reader":
             shots = [
-                Shot(at: 2.2, file: "01.png", act: {}),
+                Shot(at: 2.2, file: "01.png", act: { self.mainWindow.debugSetSidebar(visible: false) }),
                 Shot(at: 3.1, file: "02.png", act: {}),
                 Shot(at: 3.6, file: "03.png", act: { self.mainWindow.toggleNavigatorFromMenu() }),
                 Shot(at: 4.5, file: "04.png", act: {}),
@@ -203,7 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ]
         default:
             shots = [
-                Shot(at: 0.9, file: "01.png", act: {}),
+                Shot(at: 0.9, file: "01.png", act: { self.mainWindow.debugSetSidebar(visible: false) }),
                 Shot(at: 1.8, file: "02.png", act: {}),
                 Shot(at: 2.4, file: "03.png", act: { self.mainWindow.debugSetLibrarySearch("坡") }),
                 Shot(at: 3.2, file: "04.png", act: { self.mainWindow.debugSetLibrarySearch("坡面") }),

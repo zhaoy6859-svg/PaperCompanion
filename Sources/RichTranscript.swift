@@ -24,7 +24,7 @@ final class RichTranscript: NSView, WKNavigationDelegate, WKScriptMessageHandler
     }
     required init?(coder: NSCoder) { fatalError() }
     func render(threads: [AskThread], draft: String = "", question: String = "", pending: Bool = false, streaming: Bool = false, page: Int = 0, error: Bool = false) {
-        payload = ["threads": threads.map { ["question": $0.question, "answer": $0.answer, "quote": $0.quote ?? "", "page": $0.page] as [String: Any] }, "draft": draft, "question": question, "pending": pending, "streaming": streaming, "page": page, "error": error]
+        payload = ["threads": threads.map { ["question": $0.question, "answer": $0.answer, "quote": $0.quote ?? "", "page": $0.page, "created": $0.createdAt.timeIntervalSince1970] as [String: Any] }, "draft": draft, "question": question, "pending": pending, "streaming": streaming, "page": page, "error": error]
         update()
     }
     private func update() {
