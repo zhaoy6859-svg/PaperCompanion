@@ -52,6 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func handleAutomationFlags() {
         let arguments = CommandLine.arguments
+        if arguments.contains("--frames") {
+            runFrameCapture()
+            return
+        }
         guard let snapshotIndex = arguments.firstIndex(of: "--snapshot"), snapshotIndex + 1 < arguments.count else {
             return
         }
@@ -155,6 +159,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             exit(0)
         }
         RunLoop.main.add(snapshotTimer, forMode: .common)
+    }
+
+    /// Writes a short PNG sequence for the README GIFs. `--scene` is study, reader, or companion.
+    private func runFrameCapture() {
+        let arguments = CommandLine.arguments
+        guard let index = arguments.firstIndex(of: "--frames"), index + 1 < arguments.count else { return }
+        let directory = arguments[index + 1]
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let scene = arguments.firstIndex(of: "--scene").flatMap { flag -> String? in
+            guard flag + 1 < arguments.count else { return nil }
+            return arguments[flag + 1]
+        } ?? "study"
+        struct Shot {
+            var at: Double
+            var file: String
+            var act: () -> Void
+        }
+        let shots: [Shot]
+        switch scene {
+        case "reader":
+            shots = [
+                Shot(at: 2.2, file: "01.png", act: {}),
+                Shot(at: 3.1, file: "02.png", act: {}),
+                Shot(at: 3.6, file: "03.png", act: { self.mainWindow.toggleNavigatorFromMenu() }),
+                Shot(at: 4.5, file: "04.png", act: {}),
+                Shot(at: 5.0, file: "05.png", act: { self.mainWindow.debugFind("坡面径流") }),
+                Shot(at: 6.2, file: "06.png", act: {}),
+                Shot(at: 6.8, file: "07.png", act: {
+                    self.mainWindow.debugEndFind()
+                    self.mainWindow.debugShowThumbnails()
+                }),
+                Shot(at: 7.8, file: "08.png", act: {}),
+            ]
+        case "companion":
+            shots = [
+                Shot(at: 2.2, file: "01.png", act: {}),
+                Shot(at: 3.2, file: "02.png", act: {}),
+                Shot(at: 3.8, file: "03.png", act: { self.mainWindow.debugSelectDetail(detailed: true) }),
+                Shot(at: 4.8, file: "04.png", act: {}),
+                Shot(at: 5.4, file: "05.png", act: { self.mainWindow.debugSelectDetail(detailed: false) }),
+                Shot(at: 6.4, file: "06.png", act: {}),
+            ]
+        default:
+            shots = [
+                Shot(at: 0.9, file: "01.png", act: {}),
+                Shot(at: 1.8, file: "02.png", act: {}),
+                Shot(at: 2.4, file: "03.png", act: { self.mainWindow.debugSetLibrarySearch("坡") }),
+                Shot(at: 3.2, file: "04.png", act: { self.mainWindow.debugSetLibrarySearch("坡面") }),
+                Shot(at: 4.3, file: "05.png", act: {}),
+                Shot(at: 5.0, file: "06.png", act: { self.mainWindow.debugSetLibrarySearch("") }),
+                Shot(at: 5.9, file: "07.png", act: {}),
+            ]
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [self] in
+            mainWindow.prepareShowcaseFrame()
+        }
+        let last = shots.last?.file
+        for shot in shots {
+            DispatchQueue.main.asyncAfter(deadline: .now() + shot.at) { [self] in
+                shot.act()
+                mainWindow.window?.contentView?.layoutSubtreeIfNeeded()
+                mainWindow.snapshot(to: (directory as NSString).appendingPathComponent(shot.file))
+                if shot.file == last { exit(0) }
+            }
+        }
     }
 
     // MARK: Menu

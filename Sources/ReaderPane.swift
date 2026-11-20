@@ -477,6 +477,7 @@ final class ReaderPane: NSView {
     }
 
     func reloadLibrary() { emptyView.reload() }
+    func debugSetLibrarySearch(_ text: String) { emptyView.debugSetSearch(text) }
 
     // MARK: Translation column
 

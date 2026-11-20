@@ -76,6 +76,11 @@ final class LibraryHomeView: NSView, NSSearchFieldDelegate {
         search.selectText(nil)
     }
 
+    func debugSetSearch(_ text: String) {
+        search.stringValue = text
+        reload()
+    }
+
     func reload() {
         index = ShelfStore.loadMerged()
         if filterIDMissing() { filter = .all }

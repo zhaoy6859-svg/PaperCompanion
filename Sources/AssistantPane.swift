@@ -574,6 +574,11 @@ final class AssistantPane: NSView, NSTextViewDelegate {
 
     @objc private func tabTapped(_ sender: NSButton) { selectTab(sender.tag) }
 
+    func debugSelectDetail(detailed: Bool) {
+        detailControl.selectedSegment = detailed ? 1 : 0
+        Prefs.shared.answerDetail = detailed ? .detailed : .concise
+    }
+
     @objc private func detailChanged() {
         Prefs.shared.answerDetail = detailControl.selectedSegment == 1 ? .detailed : .concise
     }

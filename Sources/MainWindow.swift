@@ -1067,7 +1067,17 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
     func findPreviousInDocument() { reader.findPrevious() }
     func toggleNavigatorFromMenu() { reader.toggleNavigator() }
     func debugFind(_ query: String) { reader.beginFind(query) }
+    func debugEndFind() { reader.endFind() }
     func debugShowThumbnails() { reader.showThumbnailNavigator() }
+    func debugSetLibrarySearch(_ text: String) { reader.debugSetLibrarySearch(text) }
+    func debugSelectDetail(detailed: Bool) { assistant.debugSelectDetail(detailed: detailed) }
+
+    /// Fixed frame for README recordings. Drops the user's saved window frame first.
+    func prepareShowcaseFrame() {
+        window?.setFrameAutosaveName("PaperCompanion.Showcase")
+        window?.setFrame(NSRect(x: 48, y: 64, width: 1120, height: 720), display: true, animate: false)
+        window?.layoutIfNeeded()
+    }
 
     func toggleRegionFromMenu() { toggleRegion() }
     func showTranslationFromMenu() { toggleCompare() }
@@ -1105,6 +1115,18 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, Assistan
 
     func snapshot(to path: String) {
         let args = CommandLine.arguments
+        if args.contains("--frames"), let window, window.windowNumber > 0 {
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), path]
+            try? capture.run()
+            capture.waitUntilExit()
+            if capture.terminationStatus == 0,
+               let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+               (attrs[.size] as? Int ?? 0) > 5000 {
+                return
+            }
+        }
         let selectedWindow = args.contains("--snapshot-level") ? levelPicker?.window : window
         guard let view = selectedWindow?.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
